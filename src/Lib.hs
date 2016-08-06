@@ -8,6 +8,8 @@ import System.IO
 import Text.Printf
 import Text.ParserCombinators.ReadP
 
+import Command hiding (spaceP, commandP)
+
 data Message
     = Message
     { messageCommand :: String
@@ -69,8 +71,10 @@ handleMessage conn msg = do
     putStrLn msg
     let parsedMessage = parseMessage msg
     case parsedMessage of
-        (Message "PRIVMSG" (_:params)) -> do
-            write conn "PRIVMSG" (twitchChannel ++ " :" ++ unwords params)
+        (Message "PRIVMSG" (userString:params)) -> do
+            let user = TwitchUser (drop 1 userString)
+            let cmd = parseCommand user (reverse . drop 1 . reverse . unwords $ params)
+            write conn "PRIVMSG" (twitchChannel ++ " :" ++ show cmd)
         _ -> return ()
 
 write :: Handle -> String -> String -> IO ()
