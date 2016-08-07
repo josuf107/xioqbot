@@ -14,4 +14,4 @@ myApp req respond = do
     t <- getCurrentTime
     respond (responseLBS status200 [] (LBS.pack (html t)))
 
-html v = "<html><body>"++ show v ++"<script type=text/javascript>window.setInterval(myTimer, 1000);function myTimer(){location.reload();}</script></body></html>"
+html v = "<html><body><p id=content></p><script type=text/javascript>window.setInterval(myTimer, 1000);function myTimer(){document.getElementById(\"content\").innerHTML=new Date().toLocaleTimeString();}</script></body></html>"
