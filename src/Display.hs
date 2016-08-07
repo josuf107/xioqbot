@@ -12,4 +12,6 @@ display = do
 
 myApp req respond = do
     t <- getCurrentTime
-    respond (responseLBS status200 [] (LBS.pack (show t)))
+    respond (responseLBS status200 [] (LBS.pack (html t)))
+
+html v = "<html><body>"++ show v ++"<script type=text/javascript>window.setInterval(myTimer, 1000);function myTimer(){location.reload();}</script></body></html>"
