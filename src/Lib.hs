@@ -20,10 +20,8 @@ data Message
 
 messageP :: ReadP Message
 messageP = do
-    char ':'
-    user <- maybeP (many1 nonSpaceP >>= \user -> char '!' >> return user)
-    prefixP
-    spaceP
+    user <- maybeP (char ':' >> many1 nonSpaceP >>= \user -> char '!' >> return user)
+    optional (prefixP >> spaceP)
     command <- commandP
     params <- paramsP
     return (Message user command params)
@@ -78,8 +76,7 @@ handleMessages conn q = do
 handleMessage :: Handle -> String -> Queue -> IO Queue
 handleMessage conn msg q = do
     putStrLn msg
-    let parsedMessage = parseMessage msg
-    case parsedMessage of
+    case parseMessage msg of
         (Message (Just userString) "PRIVMSG" (_:params)) -> do
             let user = TwitchUser userString
             let cmd = parseCommand user (reverse . drop 1 . reverse . unwords $ params)
@@ -88,7 +85,7 @@ handleMessage conn msg q = do
                 Just returnMessage -> write conn "PRIVMSG" (twitchChannel ++ " :" ++ returnMessage)
                 Nothing -> return ()
             return q'
-        _ -> return q
+        (Message _ "PING" _) -> write conn "PONG" "xioqbot" >> return q
 
 write :: Handle -> String -> String -> IO ()
 write h s t = do
