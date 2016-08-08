@@ -1,5 +1,6 @@
 module Command where
 
+import qualified Data.Map as Map
 import Text.ParserCombinators.ReadP
 import Data.Char
 
@@ -13,6 +14,14 @@ data CrewSide = A | B deriving (Show, Eq, Ord)
 type Position = Int
 type Seconds = Int
 type Minutes = Int
+data CommandSpec
+    = CommandSpec
+    { commandSpecPrefix :: String
+    , commandSpecParser :: TwitchUser -> ReadP Command
+    , commandSpecHelp :: String
+    , commandSpecDefaultRestrict :: Bool
+    }
+    | InvalidCommandSpec
 
 data Command
     -- admin
@@ -35,6 +44,7 @@ data Command
     | FriendList (Maybe Position)
     | FriendClear (Maybe Position)
     -- general
+    | Help String
     | GetNNID TwitchUser
     | Index TwitchUser NNID MiiName
     | Friend TwitchUser
@@ -45,12 +55,11 @@ data Command
     | Info TwitchUser
     | Enter TwitchUser
     | Here TwitchUser
-    | Next
     -- team
     | NewTeam TwitchUser TeamName
     | TeamInvite TwitchUser TwitchUser
-    | Accept TwitchUser
-    | Decline TwitchUser
+    | Accept TwitchUser TeamName
+    | Decline TwitchUser TeamName
     | LeaveTeam TwitchUser
     -- crew
     | CrewStocks
@@ -70,130 +79,139 @@ data Command
     | Invalid String
     deriving (Show, Eq, Ord)
 
-commandP user = char '!' >> choice
-    [ onP
-    , offP
-    , setModeP
-    , allowP
-    , denyP
-    , restrictP
-    , unrestrictP
-    , newP
-    , openP
-    , closeP
-    , startP
-    , winP
-    , loseP
-    , skipP
-    , moveP
-    , setCrewStockP
-    , friendListP
-    , friendClearP
-    , getNNIDP user
-    , indexP user
-    , friendP user
-    , listP
-    , ruleSetP
-    , leaveP user
-    , removeP
-    , infoP user
-    , enterP user
-    , hereP user
-    , nextP
-    , newTeamP user
-    , teamInviteP user
-    , acceptP user
-    , declineP user
-    , leaveTeamP user
-    , crewStocksP
-    , joinCrewP user
-    , streamerP
-    , denyReplyP
-    , winBufferP
-    , listBufferP
-    , singlesLimitP
-    , doublesLimitP
-    , reenterWaitP
-    , hereTimeoutP
-    , bestOfP
-    , showSettingsP
-    ] >>= \cmd -> eof >> return cmd
-onP = mapSmashP "on" On
-offP = mapSmashP "off" Off
-setModeP = smashCmdP "mode" >> spaceP >> Mode <$> modeP
-modeP = choice
+cmd prefix parser help = CommandSpec prefix (const parser) help False
+restrictedCmd prefix parser help = CommandSpec prefix (const parser) help True
+userCmd prefix parser help = CommandSpec prefix parser help False
+
+commands =
+    [ restrictedCmd "smash on" (return On) "Turns the bot on"
+    , restrictedCmd "smash off" (return Off) "Turns the bot off"
+    , restrictedCmd "smash mode" (Mode <$> modeP) "Sets the current mode"
+    , restrictedCmd "smash allow" (Allow <$> userP)
+        "Allows given user to use restricted commands"
+    , restrictedCmd "smash deny" (Deny <$> userP)
+        "Takes away users right te use restricted commands"
+    , restrictedCmd "smash restrict" (Restrict <$> remainderP)
+        "Restricts the given command"
+    , restrictedCmd "smash unrestrict" (Unrestrict <$> remainderP)
+        "Makes the given command not restricted. Doesn't work on default restricted commands."
+    , restrictedCmd "smash new" (return New) "Creates a new queue"
+    , restrictedCmd "smash open" (return Open) "Opens the queue to entrants"
+    , restrictedCmd "smash close" (return Close) "Closes the queue to entrants"
+    , restrictedCmd "smash start" (return Start) "Starts queueing users/teams"
+    , restrictedCmd "win" (Win <$> maybeP userOrTeamP)
+        "Mark the given user/team as a winner. Defaults to streamer"
+    , restrictedCmd "lose" (return Lose)
+        "Mark the opposing team/user as the winner"
+    , restrictedCmd "smash skip" (return Skip)
+        "Skip the current team/user in the queue"
+    , restrictedCmd "smash move" (Move <$> userOrTeamP <*> intP)
+        "Move the given user/team to the given position in the queue"
+    , restrictedCmd "cb" (SetCrewStock <$> crewP <*> intP)
+        "Sets the crew stock for the given crew (e. g. !cb a 4)"
+    , restrictedCmd "friendme list" (FriendList <$> maybeP intP)
+        "List friendme's in the queue, with optional limit"
+    , restrictedCmd "friendme clear" (FriendClear <$> maybeP intP)
+        "Clear friendme's in the queue, with optional limit"
+    , cmd "help" (Help <$> remainderP)
+        "Print help for the given command"
+    , userCmd "nnid" (return . GetNNID)
+        "Display the nnid qbot has for you"
+    , userCmd "index" (\user -> Index user <$> nnidP <*> miiP)
+        "Add yourself to the index with given nnid and miiname"
+    , userCmd "friendme" (return . Friend)
+        "Mark yourself as needing to be friended"
+    , cmd "list" (List <$> maybeP intP)
+        "Display the current queue list with the given limit (default 10)"
+    , cmd "ruleset" (RuleSet <$> maybeP modeP)
+        "Display the ruleset for the given mode (default current mode)"
+    , userCmd "leave" (return . Leave)
+        "Remove yourself from the queue"
+    , restrictedCmd "remove" (Remove <$> userOrTeamP)
+        "Remove given user from the queue"
+    , userCmd "info" (\user -> Info <$> option user userP)
+        "Display info for the given user (default to yourself)"
+    , userCmd "enter" (return . Enter)
+        "Enter yourself into the queue"
+    , userCmd "here" (return . Here)
+        "Mark yourself as here for rollcall"
+    , userCmd "teamcreate" (\user -> NewTeam user <$> teamP)
+        "Create a new team with the given name"
+    , userCmd "teaminv" (\user -> TeamInvite user <$> userP)
+        "Invite the given user to your team"
+    , userCmd "accept" (\user -> Accept user <$> teamP)
+        "Accept an invitation to the given team"
+    , userCmd "decline" (\user -> Decline user <$> teamP)
+        "Decline an invitation to the given team"
+    , userCmd "teamleave" (return . LeaveTeam)
+        "Leave your current team"
+    , cmd "stocks" (return CrewStocks)
+        "Display the current crew stocks"
+    , userCmd "joincrewa" (\user -> return (JoinCrew user A))
+        "Join crew a"
+    , userCmd "joincrewb" (\user -> return (JoinCrew user B))
+        "Join crew b"
+    , restrictedCmd "streamer" (Streamer <$> userP)
+        "Sets the current streamer"
+    , restrictedCmd "denyreply" (DenyReply <$> remainderP)
+        "Sets the access denied reply"
+    , restrictedCmd "winbuffer" (WinBuffer <$> intOrOffP)
+        "Sets the win buffer, minimum number of seconds between !win commands (can be a number or off)"
+    , restrictedCmd "listbuffer" (ListBuffer <$> intOrOffP)
+        "Sets the list buffer, minimum number of seconds between !list commands (can be a number or off)"
+    , restrictedCmd "singleslimit" (SinglesLimit <$> intOrOffP)
+        "Sets the max queue size for singles (can be a number or off)"
+    , restrictedCmd "doubleslimit" (DoublesLimit <$> intOrOffP)
+        "Sets the max queue size for doubles (can be a number or off)"
+    , restrictedCmd "reenterwait" (ReenterWait <$> intOrOffP)
+        "Sets the number of minutes a player must wait before re-entering a queue (can be a number or off)"
+    , restrictedCmd "herealert" (HereTimeout <$> intOrOffP)
+        "Sets the numbe of seconds a player has to respond to rollcall with !here (can be a number or off)"
+    , restrictedCmd "singlesbestof" (BestOf Singles <$> intP)
+        "Sets the \"best of\" for a singles set"
+    , restrictedCmd "doublesbestof" (BestOf Doubles <$> intP)
+        "Sets the \"best of\" for a doubles set"
+    , restrictedCmd "settings" (return ShowSettings)
+        "Display all settings"
+    ]
+
+commandMap :: Map.Map String CommandSpec
+commandMap = Map.fromList . fmap (\c -> (commandSpecPrefix c, c)) $ commands
+
+commandP user = do
+    _ <- char '!'
+    prefix <- choice (fmap string . Map.keys $ commandMap)
+    let commandSpec = commandMap Map.! prefix
+    result <- commandSpecParser commandSpec user
+    many (char ' ')
+    eof
+    return (commandSpec, result)
+
+modeP = spaceP >> choice
     [ mapStringP "singles" Singles
     , mapStringP "doubles" Doubles
     , mapStringP "cb" Crew
     , many1 get >>= \m -> eof >> return (InvalidMode m)
     ]
-allowP = smashCmdP "allow" >> spaceP >> Allow <$> userP
-denyP = smashCmdP "deny" >> spaceP >> Deny <$> userP
-restrictP = smashCmdP "restrict" >> spaceP >> Restrict <$> (many1 get)
-unrestrictP = smashCmdP "unrestrict" >> spaceP >> Unrestrict <$> (many1 get)
-newP = mapSmashP "new" New
-openP = mapSmashP "open" Open
-closeP = mapSmashP "close" Close
-startP = mapSmashP "start" Start
-winP = string "win" >> optional spaceP >> Win <$> maybeP userOrTeamP
-loseP = string "lose" >> return Lose
-skipP = mapSmashP "skip" Skip
-moveP = smashCmdP "move" >> Move <$> spaced userOrTeamP <*> spaced intP
-setCrewStockP = mapStringP "cb" SetCrewStock <*> spaced crewP <*> spaced intP
-friendListP = mapStringP "friendme list" FriendList <*> maybeSpaced (maybeP intP)
-friendClearP = mapStringP "friendme clear" FriendClear <*> maybeSpaced (maybeP intP)
-getNNIDP user = mapStringP "nnid" (GetNNID user)
-indexP user = mapStringP "index" (Index user) <*> spaced nnidP <*> spaced miiP
-friendP user = mapStringP "friendme" (Friend user)
-listP = mapStringP "list" List <*> maybeSpaced (maybeP intP)
-ruleSetP = mapStringP "ruleset" RuleSet <*> maybeSpaced (maybeP modeP)
-leaveP user = mapStringP "leave" (Leave user)
-removeP = mapStringP "remove" Remove <*> spaced userOrTeamP
-infoP user = mapStringP "info" Info <*> option user (spaced userP)
-enterP user = mapStringP "enter" (Enter user)
-hereP user = mapStringP "here" (Here user)
-nextP = mapStringP "next" Next
-newTeamP user = mapStringP "teamcreate" (NewTeam user) <*> spaced teamP
-teamInviteP user = mapStringP "teaminv" (TeamInvite user) <*> spaced userP
-acceptP user = mapStringP "accept" (Accept user)
-declineP user = mapStringP "decline" (Decline user)
-leaveTeamP user = mapStringP "teamleave" (LeaveTeam user)
-crewStocksP = mapStringP "stocks" CrewStocks
-joinCrewP user = mapStringP "joincrew" (JoinCrew user) <*> crewP
-streamerP = mapStringP "streamer" Streamer <*> spaced userP
-denyReplyP = mapStringP "denyreply" DenyReply <*> spaced (many1 get)
-winBufferP = mapStringP "winbuffer" WinBuffer <*> spaced intOrOffP
-listBufferP = mapStringP "listbuffer" ListBuffer <*> spaced intOrOffP
-singlesLimitP = mapStringP "singleslimit" SinglesLimit <*> spaced intOrOffP
-doublesLimitP = mapStringP "doubleslimit" DoublesLimit <*> spaced intOrOffP
-reenterWaitP = mapStringP "reenterwait" ReenterWait <*> spaced intOrOffP
-hereTimeoutP = mapStringP "herealert" HereTimeout <*> spaced intOrOffP
-bestOfP = choice
-    [ mapStringP "singlesbestof" (BestOf Singles)
-    , mapStringP "doublesbestof" (BestOf Doubles)
-    ] <*> spaced intP
-showSettingsP = mapStringP "settings" ShowSettings
-
-mapSmashP cmdString cmd = smashCmdP cmdString >> return cmd
 mapStringP s r = string s >> return r
-smashCmdP cmd = string "smash" >> spaceP >> string cmd
-userP = fmap TwitchUser $ many1 (satisfy (/=' '))
-nnidP = fmap NNID $ many1 (satisfy (/=' '))
-miiP = fmap MiiName $ many1 (satisfy (/=' '))
-userOrTeamP = fmap UserOrTeam $ many1 (satisfy (/=' '))
-teamP = fmap TeamName $ many1 (satisfy (/=' '))
+userP = typedIdentifierP TwitchUser
+nnidP = typedIdentifierP NNID
+miiP = typedIdentifierP MiiName
+userOrTeamP = typedIdentifierP UserOrTeam
+teamP = typedIdentifierP TeamName
+typedIdentifierP t = spaceP >> (fmap t $ many1 (satisfy (/=' ')))
 spaceP = many1 (char ' ')
 intP = do
+    spaceP
     minus <- option "" (string "-")
     digits <- many1 (satisfy isDigit)
     return (read $ minus ++ digits)
-crewP = choice [char 'a' >> return A, char 'b' >> return B]
+crewP = spaceP >> choice [char 'a' >> return A, char 'b' >> return B]
 maybeP p = option Nothing (fmap return p)
-spaced p = spaceP >> p
-maybeSpaced p = many (char ' ') >> p
-intOrOffP = choice [string "off" >> return Nothing, Just <$> intP]
+intOrOffP = choice [spaceP >> string "off" >> return Nothing, Just <$> intP]
+remainderP = spaceP >> many1 get
 
-parseCommand :: TwitchUser -> String -> Maybe Command
+parseCommand :: TwitchUser -> String -> (CommandSpec, Command)
 parseCommand user commandString = case readP_to_S (commandP user) commandString of
-    ((cmd,_):_) -> Just cmd
-    _ -> Nothing
+    ((cmd,_):_) -> cmd
+    _ -> (InvalidCommandSpec, Invalid commandString)

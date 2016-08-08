@@ -17,12 +17,14 @@ library
   hs-source-dirs:      src
   exposed-modules:     Lib, Command, Display
   build-depends:       base >= 4.7 && < 5
+                        , mtl
                         , network
                         , warp
                         , wai
                         , bytestring
                         , http-types
                         , time
+                        , containers
   default-language:    Haskell2010
 
 executable smash-bot-exe

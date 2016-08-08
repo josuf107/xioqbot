@@ -9,21 +9,24 @@ import Text.Printf
 import Text.ParserCombinators.ReadP
 
 import Command hiding (spaceP, commandP)
+import Queue hiding (spaceP, commandP, Message)
 
 data Message
     = Message
-    { messageCommand :: String
+    { messageUser :: Maybe String
+    , messageCommand :: String
     , messageParams :: [String]
     } deriving (Show,Ord,Eq)
 
 messageP :: ReadP Message
 messageP = do
     char ':'
+    user <- maybeP (many1 nonSpaceP >>= \user -> char '!' >> return user)
     prefixP
     spaceP
     command <- commandP
     params <- paramsP
-    return (Message command params)
+    return (Message user command params)
 prefixP = many1 nonSpaceP
 spaceP = many1 (char ' ')
 commandP = choice [many1 (satisfy isLetter), replicateM 3 numberP]
@@ -64,18 +67,28 @@ talk = do
     write conn "JOIN" twitchChannel
     replicateM_ 10 $ hGetLine conn >>= putStrLn
     write conn "PRIVMSG" (twitchChannel ++ " :Hi everybody")
-    forever $ hGetLine conn >>= handleMessage conn
+    handleMessages conn defaultQueue
 
-handleMessage :: Handle -> String -> IO ()
-handleMessage conn msg = do
+handleMessages :: Handle -> Queue -> IO ()
+handleMessages conn q = do
+    nextLine <- hGetLine conn
+    q' <- handleMessage conn nextLine q
+    handleMessages conn q'
+
+handleMessage :: Handle -> String -> Queue -> IO Queue
+handleMessage conn msg q = do
     putStrLn msg
     let parsedMessage = parseMessage msg
     case parsedMessage of
-        (Message "PRIVMSG" (userString:params)) -> do
-            let user = TwitchUser (drop 1 userString)
+        (Message (Just userString) "PRIVMSG" (_:params)) -> do
+            let user = TwitchUser userString
             let cmd = parseCommand user (reverse . drop 1 . reverse . unwords $ params)
-            write conn "PRIVMSG" (twitchChannel ++ " :" ++ show cmd)
-        _ -> return ()
+            let (q', maybeReturnMessage) = handleMaybeDisabled user cmd q
+            case maybeReturnMessage of
+                Just returnMessage -> write conn "PRIVMSG" (twitchChannel ++ " :" ++ returnMessage)
+                Nothing -> return ()
+            return q'
+        _ -> return q
 
 write :: Handle -> String -> String -> IO ()
 write h s t = do
