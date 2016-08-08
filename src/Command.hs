@@ -36,7 +36,7 @@ data Command
     | Open
     | Close
     | Start
-    | Win (Maybe UserOrTeam)
+    | Win
     | Lose
     | Skip
     | Move UserOrTeam Position
@@ -99,7 +99,7 @@ commands =
     , restrictedCmd "smash open" (return Open) "Opens the queue to entrants"
     , restrictedCmd "smash close" (return Close) "Closes the queue to entrants"
     , restrictedCmd "smash start" (return Start) "Starts queueing users/teams"
-    , restrictedCmd "win" (Win <$> maybeP userOrTeamP)
+    , restrictedCmd "win" (return Win)
         "Mark the given user/team as a winner. Defaults to streamer"
     , restrictedCmd "lose" (return Lose)
         "Mark the opposing team/user as the winner"
