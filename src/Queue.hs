@@ -43,7 +43,6 @@ data Queue
     , queueStreamer :: TwitchUser
     , queueSetWins :: Int
     , queueSetLosses :: Int
-    , queueBestOf :: Int
     , queueCrewStockA :: Int
     , queueCrewStockB :: Int
     , queueFriendMes :: Set.Set TwitchUser
@@ -53,6 +52,15 @@ data Queue
     , queueRulesCrew :: String
     , queueHereMap :: Map.Map TwitchUser UTCTime
     , queueInvites :: Map.Map TwitchUser (Set.Set TeamName)
+    , queueDenyReply :: String
+    , queueWinBuffer :: Maybe Seconds
+    , queueListBuffer :: Maybe Seconds
+    , queueSinglesLimit :: Maybe Int
+    , queueDoublesLimit :: Maybe Int
+    , queueReenterWait :: Maybe Minutes
+    , queueHereAlert :: Maybe Seconds
+    , queueSinglesBestOf :: Int
+    , queueDoublesBestOf :: Int
     } deriving (Show, Eq, Ord)
 type Message = String
 
@@ -68,7 +76,6 @@ defaultQueue = Queue
     , queueStreamer = TwitchUser "josuf107"
     , queueSetWins = 0
     , queueSetLosses = 0
-    , queueBestOf = 3
     , queueCrewStockA = 3
     , queueCrewStockB = 3
     , queueFriendMes = Set.empty
@@ -78,6 +85,15 @@ defaultQueue = Queue
     , queueRulesCrew = "It's a crew battle."
     , queueHereMap = Map.empty
     , queueInvites = Map.empty
+    , queueDenyReply = "You can't do that"
+    , queueWinBuffer = Nothing
+    , queueListBuffer = Nothing
+    , queueSinglesLimit = Nothing
+    , queueDoublesLimit = Nothing
+    , queueReenterWait = Nothing
+    , queueHereAlert = Nothing
+    , queueSinglesBestOf = 3
+    , queueDoublesBestOf = 3
     }
 
 type Modify a = a -> a
@@ -120,6 +136,26 @@ withQueueHereMap :: QueueModify (Map.Map TwitchUser UTCTime)
 withQueueHereMap f = modify $ \q -> q { queueHereMap = f (queueHereMap q) }
 withQueueInvites :: QueueModify (Map.Map TwitchUser (Set.Set TeamName))
 withQueueInvites f = modify $ \q -> q { queueInvites = f (queueInvites q) }
+setQueueStreamer :: QueueSet TwitchUser
+setQueueStreamer v = modify $ \q -> q { queueStreamer = v }
+setQueueDenyReply :: QueueSet String
+setQueueDenyReply v = modify $ \q -> q { queueDenyReply = v }
+setQueueWinBuffer :: QueueSet (Maybe Seconds)
+setQueueWinBuffer v = modify $ \q -> q { queueWinBuffer = v }
+setQueueListBuffer :: QueueSet (Maybe Seconds)
+setQueueListBuffer v = modify $ \q -> q { queueListBuffer = v }
+setQueueSinglesLimit :: QueueSet (Maybe Int)
+setQueueSinglesLimit v = modify $ \q -> q { queueSinglesLimit = v }
+setQueueDoublesLimit :: QueueSet (Maybe Int)
+setQueueDoublesLimit v = modify $ \q -> q { queueDoublesLimit = v }
+setQueueReenterWait :: QueueSet (Maybe Minutes)
+setQueueReenterWait v = modify $ \q -> q { queueReenterWait = v }
+setQueueHereAlert :: QueueSet (Maybe Seconds)
+setQueueHereAlert v = modify $ \q -> q { queueHereAlert = v }
+setQueueSinglesBestOf :: QueueSet Int
+setQueueSinglesBestOf v = modify $ \q -> q { queueSinglesBestOf = v }
+setQueueDoublesBestOf :: QueueSet Int
+setQueueDoublesBestOf v = modify $ \q -> q { queueDoublesBestOf = v }
 
 handleTimestamped :: TwitchUser -> UTCTime -> (CommandSpec, Command) -> Queue -> (Queue, Maybe Message)
 handleTimestamped user time cmd q = handleMaybeDisabled user cmd (q { queueLastMessage = time })
@@ -362,7 +398,42 @@ handleCommand (LeaveTeam user) = do
             msg $ printf "Removed %s from team %s."
                 (getTwitchUser user)
                 (getTeamName existingTeam)
+handleCommand (Streamer user) = do
+    setQueueStreamer user
+    msg $ printf "%s is now the streamer!" (getTwitchUser user)
+handleCommand (DenyReply reply) = do
+    setQueueDenyReply reply
+    msg $ printf "%s is the new deny reply." reply
+handleCommand (WinBuffer val) = do
+    setAndShow "win buffer" setQueueWinBuffer val
+handleCommand (ListBuffer val) = do
+    setAndShow "list buffer" setQueueListBuffer val
+handleCommand (SinglesLimit val) = do
+    setAndShow "singles limit" setQueueSinglesLimit val
+handleCommand (DoublesLimit val) = do
+    setAndShow "doubles limit" setQueueDoublesLimit val
+handleCommand (ReenterWait val) = do
+    setAndShow "reenter wait" setQueueReenterWait val
+handleCommand (HereTimeout val) = do
+    setAndShow "here timeout" setQueueHereAlert val
+handleCommand (BestOf Singles val) = do
+    setQueueSinglesBestOf val
+    msg $ printf "Singles best of is %d" val
+handleCommand (BestOf Doubles val) = do
+    setQueueDoublesBestOf val
+    msg $ printf "Doubles best of is %d" val
+handleCommand (BestOf mode val) = do
+    msg $ printf "Can't set best of for mode %s" (show mode)
 handleCommand _ = msg "Not implemented yet!"
+
+setAndShow :: Show a => String -> (Maybe a -> State Queue ()) -> Maybe a -> State Queue (Maybe Message)
+setAndShow name set val = do
+    set val
+    msg $ printf "The %s is %s." name (showMaybeOff val)
+
+showMaybeOff :: Show a => Maybe a -> String
+showMaybeOff Nothing = "off"
+showMaybeOff (Just v) = show v
 
 removeFromQueue :: UserOrTeam -> State Queue (Maybe Message)
 removeFromQueue userOrTeam = do
@@ -437,7 +508,13 @@ getNextUp = get >>= \q -> case Seq.viewl (Seq.drop 1 $ queueQueue q) of
     _ -> return Nothing
 
 getRequiredWins :: State Queue Int
-getRequiredWins = getQueue (ceiling . (/2) . fromIntegral . queueBestOf)
+getRequiredWins = do
+    mode <- getQueue queueMode
+    bestOf <- case mode of
+        Singles -> getQueue queueSinglesBestOf
+        Doubles -> getQueue queueDoublesBestOf
+        _ -> return 0 -- This doesn't really make sense
+    return (ceiling . (/2) . fromIntegral $ bestOf)
 
 getFriendMesForMode :: State Queue (Map.Map UserOrTeam TwitchUser)
 getFriendMesForMode = do
