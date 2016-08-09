@@ -45,6 +45,7 @@ data Queue
     , queueCrewStockA :: Int
     , queueCrewStockB :: Int
     , queueFriendMes :: Set.Set TwitchUser
+    , queueIndex :: Map.Map TwitchUser (NNID, MiiName)
     } deriving (Show, Eq, Ord)
 type Message = String
 
@@ -63,6 +64,7 @@ defaultQueue = Queue
     , queueCrewStockA = 3
     , queueCrewStockB = 3
     , queueFriendMes = Set.empty
+    , queueIndex = Map.empty
     }
 
 type Modify a = a -> a
@@ -91,6 +93,8 @@ setQueueCrewStockB :: Int -> State Queue ()
 setQueueCrewStockB v = modify $ \q -> q { queueCrewStockB = v }
 withQueueFriendMes :: Modify (Set.Set TwitchUser) -> State Queue ()
 withQueueFriendMes f = modify $ \q -> q { queueFriendMes = f (queueFriendMes q) }
+withQueueIndex :: Modify (Map.Map TwitchUser (NNID, MiiName)) -> State Queue ()
+withQueueIndex f = modify $ \q -> q { queueIndex = f (queueIndex q) }
 
 handleMaybeDisabled :: TwitchUser -> (CommandSpec, Command) -> Queue -> (Queue, Maybe Message)
 handleMaybeDisabled user (_, On) q = (q { queueOn = True }, Just "qbot enabled. Hello everyone!")
@@ -192,8 +196,7 @@ handleCommand (FriendList maybeLimit) = do
     let limit = fromMaybe 10 maybeLimit
     friendMes <- fmap Map.keysSet getFriendMesForMode
     friendMeQueue <- fmap (Seq.take limit . Seq.filter (\f -> Set.member f friendMes) . queueQueue) get
-    let list = foldr (\entry result -> result ++ getUserOrTeam entry ++ " ") "" friendMeQueue
-    msg $ printf "Next %d friendmes in the queue: %s" limit list
+    msg $ printf "Next %d friendmes in the queue: %s" limit (printQueue friendMeQueue)
     where
         getFriendMes mode friendMeUsers teams = case mode of
             Singles -> Set.map (Just . generalizeUser) friendMeUsers
@@ -205,6 +208,17 @@ handleCommand (FriendClear maybeLimit) = do
     friendMeQueue <- fmap (Seq.take limit . Seq.filter (\f -> Set.member f (Map.keysSet friendMes)) . queueQueue) get
     mapM_ (\userOrTeam -> maybe (return ()) (\f -> withQueueFriendMes (Set.delete f)) (Map.lookup userOrTeam friendMes)) friendMeQueue
     msg $ printf "Cleared friend list with limit %d" limit
+handleCommand (GetNNID user) = do
+    index <- fmap queueIndex get
+    msg $ case Map.lookup user index of
+        Just (nnid, _) -> printf "%s's nnid is %s" (getTwitchUser user) (getNNID nnid)
+        Nothing -> printf "%s is not in the index. Try !index nnid miiname" (getTwitchUser user)
+handleCommand (Index user nnid miid) = do
+    withQueueIndex (Map.insert user (nnid, miid))
+    msg $ printf "Added %s to index" (getTwitchUser user)
+handleCommand (Friend user) = do
+    withQueueFriendMes (Set.insert user)
+    msg $ printf "Added %s to friendme list" (getTwitchUser user)
 handleCommand (Enter user) = do
     open <- fmap queueOpen get
     if not open
@@ -219,10 +233,21 @@ handleCommand (Enter user) = do
                         (getUserOrTeam userOrTeam)
                         position
                 Nothing -> msg $ printf "Couldn't add %s to queue. Try joining a team." (getTwitchUser user)
-handleCommand (Friend user) = do
-    withQueueFriendMes (Set.insert user)
-    msg $ printf "Added %s to friendme list" (getTwitchUser user)
+handleCommand (List maybeLimit) = do
+    let limit = fromMaybe 10 maybeLimit
+    current <- getCurrentTip
+    case current of
+        Nothing -> msg "Queue is empty."
+        Just current -> do
+            queue <- fmap (Seq.drop 1 . Seq.take limit . queueQueue) get
+            let msgStart = printf "Currently playing %s." (getUserOrTeam current)
+            msg $ case Seq.null queue of
+                True -> msgStart ++ " No other entries in the queue."
+                False -> msgStart ++ printf " Next in queue: %s" (printQueue queue)
 handleCommand _ = msg "Not implemented yet!"
+
+printQueue :: Seq.Seq UserOrTeam -> String
+printQueue = foldr (\entry result -> result ++ getUserOrTeam entry ++ " ") ""
 
 insert :: Int -> a -> Seq.Seq a -> Seq.Seq a
 insert i a s = (\(l, r) -> l Seq.>< (a Seq.<| r)) $ Seq.splitAt i s
