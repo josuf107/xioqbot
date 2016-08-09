@@ -3,6 +3,7 @@ module Lib where
 import Control.Concurrent
 import Control.Monad
 import Data.Char
+import Data.Time
 import Network
 import System.IO
 import Text.Printf
@@ -75,12 +76,13 @@ handleMessages conn q = do
 
 handleMessage :: Handle -> String -> Queue -> IO Queue
 handleMessage conn msg q = do
+    time <- getCurrentTime
     putStrLn msg
     case parseMessage msg of
         (Message (Just userString) "PRIVMSG" (_:params)) -> do
             let user = TwitchUser userString
             let cmd = parseCommand user (reverse . drop 1 . reverse . unwords $ params)
-            let (q', maybeReturnMessage) = handleMaybeDisabled user cmd q
+            let (q', maybeReturnMessage) = handleTimestamped user time cmd q
             case maybeReturnMessage of
                 Just returnMessage -> write conn "PRIVMSG" (twitchChannel ++ " :" ++ returnMessage)
                 Nothing -> return ()

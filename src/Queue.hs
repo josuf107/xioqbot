@@ -7,6 +7,7 @@ import Command
 import Control.Monad
 import Control.Monad.State
 import Data.Tuple
+import Data.Time
 import Data.Maybe
 import Data.Monoid
 import Data.Foldable
@@ -32,6 +33,7 @@ test = go defaultQueue
 data Queue
     = Queue
     { queueOn :: Bool
+    , queueLastMessage :: UTCTime
     , queueMode :: Mode
     , queueAdmins :: Set.Set TwitchUser
     , queueRestricted :: Set.Set String
@@ -49,11 +51,14 @@ data Queue
     , queueRulesSingles :: String
     , queueRulesDoubles :: String
     , queueRulesCrew :: String
+    , queueHereMap :: Map.Map TwitchUser UTCTime
+    , queueInvites :: Map.Map TwitchUser (Set.Set TeamName)
     } deriving (Show, Eq, Ord)
 type Message = String
 
 defaultQueue = Queue
     { queueOn = True
+    , queueLastMessage = UTCTime (fromGregorian 2016 1 1) 0
     , queueMode = Singles
     , queueAdmins = Set.fromList [TwitchUser "josuf107"]
     , queueRestricted = Set.empty
@@ -71,6 +76,8 @@ defaultQueue = Queue
     , queueRulesSingles = "It's singles."
     , queueRulesDoubles = "It's doubles."
     , queueRulesCrew = "It's a crew battle."
+    , queueHereMap = Map.empty
+    , queueInvites = Map.empty
     }
 
 type Modify a = a -> a
@@ -109,6 +116,13 @@ setQueueRulesDoubles :: QueueSet String
 setQueueRulesDoubles v = modify $ \q -> q { queueRulesDoubles = v }
 setQueueRulesCrew :: QueueSet String
 setQueueRulesCrew v = modify $ \q -> q { queueRulesCrew = v }
+withQueueHereMap :: QueueModify (Map.Map TwitchUser UTCTime)
+withQueueHereMap f = modify $ \q -> q { queueHereMap = f (queueHereMap q) }
+withQueueInvites :: QueueModify (Map.Map TwitchUser (Set.Set TeamName))
+withQueueInvites f = modify $ \q -> q { queueInvites = f (queueInvites q) }
+
+handleTimestamped :: TwitchUser -> UTCTime -> (CommandSpec, Command) -> Queue -> (Queue, Maybe Message)
+handleTimestamped user time cmd q = handleMaybeDisabled user cmd (q { queueLastMessage = time })
 
 handleMaybeDisabled :: TwitchUser -> (CommandSpec, Command) -> Queue -> (Queue, Maybe Message)
 handleMaybeDisabled user (_, On) q = (q { queueOn = True }, Just "qbot enabled. Hello everyone!")
@@ -228,20 +242,6 @@ handleCommand (Index user nnid miid) = do
 handleCommand (Friend user) = do
     withQueueFriendMes (Set.insert user)
     msg $ printf "Added %s to friendme list" (getTwitchUser user)
-handleCommand (Enter user) = do
-    open <- getQueue queueOpen
-    if not open
-        then msg "Sorry the queue is closed so you can't !enter. Use !smash open to open the queue"
-        else do
-            maybeUserOrTeam <- userOrTeamBasedOnMode user
-            case maybeUserOrTeam of
-                Just userOrTeam -> do
-                    withQueueQueue (Seq.|> userOrTeam)
-                    position <- getQueue (Seq.length . queueQueue)
-                    msg $ printf "Added %s to the queue! You are at position %d"
-                        (getUserOrTeam userOrTeam)
-                        position
-                Nothing -> msg $ printf "Couldn't add %s to queue. Try joining a team." (getTwitchUser user)
 handleCommand (List maybeLimit) = do
     let limit = fromMaybe 10 maybeLimit
     current <- getCurrentTip
@@ -264,7 +264,114 @@ handleCommand (RuleSet maybeMode) = do
     msg $ printf "Rules for %s: %s"
         (show mode)
         ruleset
+handleCommand (Leave user) = do
+    userOrTeam <- userOrTeamBasedOnMode user
+    case userOrTeam of
+        Nothing -> msg $ printf "%s is not on a team, so I can't remove them from the queue." (getTwitchUser user)
+        Just userOrTeam -> removeFromQueue userOrTeam
+handleCommand (Remove userOrTeam) = removeFromQueue userOrTeam
+handleCommand (Info user) = do
+    maybeInfo <- getQueue (Map.lookup user . queueIndex)
+    msg $ case maybeInfo of
+        Nothing -> printf "%s is not in the index. Add yourself with !index nnid miiName." (getTwitchUser user)
+        (Just (nnid, miiName)) -> printf "Twitch name: %s, NNID: %s, MiiName: %s." (getTwitchUser user) (getNNID nnid) (getMiiName miiName)
+handleCommand (Enter user) = do
+    open <- getQueue queueOpen
+    if not open
+        then msg "Sorry the queue is closed so you can't !enter. Use !smash open to open the queue"
+        else do
+            maybeUserOrTeam <- userOrTeamBasedOnMode user
+            case maybeUserOrTeam of
+                Just userOrTeam -> do
+                    withQueueQueue (Seq.|> userOrTeam)
+                    position <- getQueue (Seq.length . queueQueue)
+                    msg $ printf "Added %s to the queue! You are at position %d"
+                        (getUserOrTeam userOrTeam)
+                        position
+                Nothing -> msg $ printf "Couldn't add %s to queue. Try joining a team." (getTwitchUser user)
+handleCommand (Here user) = do
+    time <- getQueue queueLastMessage
+    withQueueHereMap (Map.insert user time)
+    msg $ printf "Okay! %s is ready!" (getTwitchUser user)
+handleCommand (NewTeam creator team) = do
+    existingTeam <- getQueue (Map.lookup creator . queueTeams)
+    case existingTeam of
+        Just existingTeam -> msg $ printf "Sorry %s, you are already in a team! You can leave your current team (%s) with !teamleave." (getTwitchUser creator) (getTeamName existingTeam)
+        Nothing -> do
+            withQueueTeams (Map.insert creator team)
+            msg $ printf "%s has created the new team %s! Invite an ally with !teaminv [name]." (getTwitchUser creator) (getTeamName team)
+handleCommand (TeamInvite inviter invited) = do
+    invitingTeam <- getQueue (Map.lookup inviter . queueTeams)
+    invitedTeam <- getQueue (Map.lookup invited . queueTeams)
+    case (invitingTeam, invitedTeam) of
+        (Nothing, _) -> msg $ printf "Sorry %s, you can't invite someone to your team until you create a team with !teamcreate teamname." (getTwitchUser inviter)
+        (_, Just invitedTeam) -> msg $ printf "Sorry %s, %s is already on team %s."
+            (getTwitchUser inviter)
+            (getTwitchUser invited)
+            (getTeamName invitedTeam)
+        (Just invitingTeam, _) -> do
+            withQueueInvites (Map.alter (addToSet invitingTeam) invited)
+            msg $ printf "%s, you've been invited join %s. Type !accept %s to accept or !decline %s to decline."
+                (getTwitchUser invited)
+                (getTeamName invitingTeam)
+                (getTeamName invitingTeam)
+                (getTeamName invitingTeam)
+    where
+        addToSet v (Just s) = Just (Set.insert v s)
+        addToSet v Nothing = Just (Set.singleton v)
+handleCommand (Accept user team) = do
+    existingTeam <- getQueue (Map.lookup user . queueTeams)
+    teamSize <- getQueue (Map.size . Map.filter (==team) . queueTeams)
+    invited <- getQueue (maybe False (Set.member team) . Map.lookup user . queueInvites)
+    case (invited, teamSize, existingTeam) of
+        (_, 0, _) -> msg $ printf "Sorry %s, but team %s does not exist."
+            (getTwitchUser user)
+            (getTeamName team)
+        (False, _, _) -> msg $ printf "Sorry %s, but you weren't invited to team %s."
+            (getTwitchUser user)
+            (getTeamName team)
+        (_, _, Just existingTeam) -> msg $ printf "Sorry %s, but you're already on team %s. Use !teamleave if you want to leave that team to join %s."
+            (getTwitchUser user)
+            (getTeamName existingTeam)
+            (getTeamName team)
+        (_, 2, _) -> msg $ printf "Sorry %s, but team %s is already full."
+            (getTwitchUser user)
+            (getTeamName team)
+        (_, _, Nothing) -> do
+            withQueueTeams (Map.insert user team)
+            msg $ printf "%s has joined team %s!"
+                (getTwitchUser user)
+                (getTeamName team)
+handleCommand (Decline user team) = do
+    wasInvited <- getQueue (maybe False (Set.member team) . Map.lookup user . queueInvites)
+    withQueueInvites (Map.adjust (Set.delete team) user)
+    msg $ case wasInvited of
+        False -> printf "%s, you weren't invited to join team %s."
+            (getTwitchUser user)
+            (getTeamName team)
+        True -> printf "%s declined to join team %s."
+            (getTwitchUser user)
+            (getTeamName team)
+handleCommand (LeaveTeam user) = do
+    existingTeam <- getQueue (Map.lookup user . queueTeams)
+    case existingTeam of
+        Nothing -> msg $ printf "%s, you weren't on a team."
+            (getTwitchUser user)
+        Just existingTeam -> do
+            withQueueTeams (Map.delete user)
+            msg $ printf "Removed %s from team %s."
+                (getTwitchUser user)
+                (getTeamName existingTeam)
 handleCommand _ = msg "Not implemented yet!"
+
+removeFromQueue :: UserOrTeam -> State Queue (Maybe Message)
+removeFromQueue userOrTeam = do
+    queueSize <- getQueue (Seq.length . queueQueue)
+    withQueueQueue (Seq.filter (/=userOrTeam))
+    queueSize' <- getQueue (Seq.length . queueQueue)
+    msg $ case queueSize == queueSize' of
+        True -> printf "%s is not in the queue, so I can't remove them from the queue." (getUserOrTeam userOrTeam)
+        False -> printf "Removed %s from the queue." (getUserOrTeam userOrTeam)
 
 getQueue :: (Queue -> a) -> State Queue a
 getQueue f = fmap f get
