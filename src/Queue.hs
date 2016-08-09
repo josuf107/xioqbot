@@ -313,18 +313,18 @@ handleCommand (Info user) = do
         (Just (nnid, miiName)) -> printf "Twitch name: %s, NNID: %s, MiiName: %s." (getTwitchUser user) (getNNID nnid) (getMiiName miiName)
 handleCommand (Enter user) = do
     open <- getQueue queueOpen
-    if not open
-        then msg "Sorry the queue is closed so you can't !enter. Use !smash open to open the queue"
-        else do
-            maybeUserOrTeam <- userOrTeamBasedOnMode user
-            case maybeUserOrTeam of
-                Just userOrTeam -> do
-                    withQueueQueue (Seq.|> userOrTeam)
-                    position <- getQueue (Seq.length . queueQueue)
-                    msg $ printf "Added %s to the queue! You are at position %d"
-                        (getUserOrTeam userOrTeam)
+    indexed <- getQueue (Map.member user . queueIndex)
+    maybeUserOrTeam <- userOrTeamBasedOnMode user
+    case (open, indexed, maybeUserOrTeam) of
+        (False, _, _) -> msg "Sorry the queue is closed so you can't !enter. Use !smash open to open the queue."
+        (_, False, _) -> msg $ printf "%s is not in the index. Add yourself with !index nnid miiName." (getTwitchUser user)
+        (_, _, Nothing) -> msg $ printf "Couldn't add %s to queue. Try joining a team." (getTwitchUser user)
+        (_, _, Just userOrTeam) -> do
+            withQueueQueue (Seq.|> userOrTeam)
+            position <- getQueue (Seq.length . queueQueue)
+            msg $ printf "Added %s to the queue! You are at position %d"
+                (getUserOrTeam userOrTeam)
                         position
-                Nothing -> msg $ printf "Couldn't add %s to queue. Try joining a team." (getTwitchUser user)
 handleCommand (Here user) = do
     time <- getQueue queueLastMessage
     withQueueHereMap (Map.insert user time)
