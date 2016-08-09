@@ -46,6 +46,9 @@ data Queue
     , queueCrewStockB :: Int
     , queueFriendMes :: Set.Set TwitchUser
     , queueIndex :: Map.Map TwitchUser (NNID, MiiName)
+    , queueRulesSingles :: String
+    , queueRulesDoubles :: String
+    , queueRulesCrew :: String
     } deriving (Show, Eq, Ord)
 type Message = String
 
@@ -65,36 +68,47 @@ defaultQueue = Queue
     , queueCrewStockB = 3
     , queueFriendMes = Set.empty
     , queueIndex = Map.empty
+    , queueRulesSingles = "It's singles."
+    , queueRulesDoubles = "It's doubles."
+    , queueRulesCrew = "It's a crew battle."
     }
 
 type Modify a = a -> a
+type QueueModify a = Modify a -> State Queue ()
+type QueueSet a = a -> State Queue ()
 
-setQueueOn :: Bool -> State Queue ()
+setQueueOn :: QueueSet Bool
 setQueueOn v = modify $ \q -> q { queueOn = v }
-setQueueMode :: Mode -> State Queue ()
+setQueueMode :: QueueSet Mode
 setQueueMode v = modify $ \q -> q { queueMode = v }
-withQueueAdmins :: Modify (Set.Set TwitchUser) -> State Queue ()
+withQueueAdmins :: QueueModify (Set.Set TwitchUser)
 withQueueAdmins f = modify $ \q -> q { queueAdmins = f (queueAdmins q) }
-withQueueRestricted :: Modify (Set.Set String) -> State Queue ()
+withQueueRestricted :: QueueModify (Set.Set String)
 withQueueRestricted f = modify $ \q -> q { queueRestricted = f (queueRestricted q) }
-withQueueQueue :: Modify (Seq.Seq UserOrTeam) -> State Queue ()
+withQueueQueue :: QueueModify (Seq.Seq UserOrTeam)
 withQueueQueue f = modify $ \q -> q { queueQueue = f (queueQueue q) }
-setQueueOpen :: Bool -> State Queue ()
+setQueueOpen :: QueueSet Bool
 setQueueOpen v = modify $ \q -> q { queueOpen = v }
-withQueueTeams :: Modify (Map.Map TwitchUser TeamName) -> State Queue ()
+withQueueTeams :: QueueModify (Map.Map TwitchUser TeamName)
 withQueueTeams f = modify $ \q -> q { queueTeams = f (queueTeams q) }
-withQueueSetWins :: Modify Int -> State Queue ()
+withQueueSetWins :: QueueModify Int
 withQueueSetWins f = modify $ \q -> q { queueSetWins = f (queueSetWins q) }
-withQueueSetLosses :: Modify Int -> State Queue ()
+withQueueSetLosses :: QueueModify Int
 withQueueSetLosses f = modify $ \q -> q { queueSetLosses = f (queueSetLosses q) }
-setQueueCrewStockA :: Int -> State Queue ()
+setQueueCrewStockA :: QueueSet Int
 setQueueCrewStockA v = modify $ \q -> q { queueCrewStockA = v }
-setQueueCrewStockB :: Int -> State Queue ()
+setQueueCrewStockB :: QueueSet Int
 setQueueCrewStockB v = modify $ \q -> q { queueCrewStockB = v }
-withQueueFriendMes :: Modify (Set.Set TwitchUser) -> State Queue ()
+withQueueFriendMes :: QueueModify (Set.Set TwitchUser)
 withQueueFriendMes f = modify $ \q -> q { queueFriendMes = f (queueFriendMes q) }
-withQueueIndex :: Modify (Map.Map TwitchUser (NNID, MiiName)) -> State Queue ()
+withQueueIndex :: QueueModify (Map.Map TwitchUser (NNID, MiiName))
 withQueueIndex f = modify $ \q -> q { queueIndex = f (queueIndex q) }
+setQueueRulesSingles :: QueueSet String
+setQueueRulesSingles v = modify $ \q -> q { queueRulesSingles = v }
+setQueueRulesDoubles :: QueueSet String
+setQueueRulesDoubles v = modify $ \q -> q { queueRulesDoubles = v }
+setQueueRulesCrew :: QueueSet String
+setQueueRulesCrew v = modify $ \q -> q { queueRulesCrew = v }
 
 handleMaybeDisabled :: TwitchUser -> (CommandSpec, Command) -> Queue -> (Queue, Maybe Message)
 handleMaybeDisabled user (_, On) q = (q { queueOn = True }, Just "qbot enabled. Hello everyone!")
@@ -153,7 +167,7 @@ handleCommand Start = do
         (Nothing, _) -> "Can't start because the queue is empty!"
 handleCommand Win = do
     opponent <- getCurrentTip
-    streamerUser <- fmap queueStreamer get
+    streamerUser <- getQueue queueStreamer
     streamer <- userOrTeamBasedOnMode streamerUser
     case (streamer, opponent) of
         (_, Nothing) -> msg "There's no one in the queue"
@@ -163,7 +177,7 @@ handleCommand Win = do
             endMatch streamer opponent
 handleCommand Lose = do
     opponent <- getCurrentTip
-    streamerUser <- fmap queueStreamer get
+    streamerUser <- getQueue queueStreamer
     streamer <- userOrTeamBasedOnMode streamerUser
     case (streamer, opponent) of
         (_, Nothing) -> msg "There's no one in the queue"
@@ -195,21 +209,16 @@ handleCommand (SetCrewStock crew stock) = do
 handleCommand (FriendList maybeLimit) = do
     let limit = fromMaybe 10 maybeLimit
     friendMes <- fmap Map.keysSet getFriendMesForMode
-    friendMeQueue <- fmap (Seq.take limit . Seq.filter (\f -> Set.member f friendMes) . queueQueue) get
+    friendMeQueue <- getQueue (Seq.take limit . Seq.filter (\f -> Set.member f friendMes) . queueQueue)
     msg $ printf "Next %d friendmes in the queue: %s" limit (printQueue friendMeQueue)
-    where
-        getFriendMes mode friendMeUsers teams = case mode of
-            Singles -> Set.map (Just . generalizeUser) friendMeUsers
-            Doubles -> Set.map (\user -> fmap generalizeTeam . Map.lookup user $ teams) friendMeUsers
-            Crew ->  Set.empty -- TODO: do we need this?
 handleCommand (FriendClear maybeLimit) = do
     let limit = fromMaybe 10 maybeLimit
     friendMes <- getFriendMesForMode
-    friendMeQueue <- fmap (Seq.take limit . Seq.filter (\f -> Set.member f (Map.keysSet friendMes)) . queueQueue) get
+    friendMeQueue <- getQueue (Seq.take limit . Seq.filter (\f -> Set.member f (Map.keysSet friendMes)) . queueQueue)
     mapM_ (\userOrTeam -> maybe (return ()) (\f -> withQueueFriendMes (Set.delete f)) (Map.lookup userOrTeam friendMes)) friendMeQueue
     msg $ printf "Cleared friend list with limit %d" limit
 handleCommand (GetNNID user) = do
-    index <- fmap queueIndex get
+    index <- getQueue queueIndex
     msg $ case Map.lookup user index of
         Just (nnid, _) -> printf "%s's nnid is %s" (getTwitchUser user) (getNNID nnid)
         Nothing -> printf "%s is not in the index. Try !index nnid miiname" (getTwitchUser user)
@@ -220,7 +229,7 @@ handleCommand (Friend user) = do
     withQueueFriendMes (Set.insert user)
     msg $ printf "Added %s to friendme list" (getTwitchUser user)
 handleCommand (Enter user) = do
-    open <- fmap queueOpen get
+    open <- getQueue queueOpen
     if not open
         then msg "Sorry the queue is closed so you can't !enter. Use !smash open to open the queue"
         else do
@@ -228,7 +237,7 @@ handleCommand (Enter user) = do
             case maybeUserOrTeam of
                 Just userOrTeam -> do
                     withQueueQueue (Seq.|> userOrTeam)
-                    position <- fmap (Seq.length . queueQueue) get
+                    position <- getQueue (Seq.length . queueQueue)
                     msg $ printf "Added %s to the queue! You are at position %d"
                         (getUserOrTeam userOrTeam)
                         position
@@ -239,12 +248,26 @@ handleCommand (List maybeLimit) = do
     case current of
         Nothing -> msg "Queue is empty."
         Just current -> do
-            queue <- fmap (Seq.drop 1 . Seq.take limit . queueQueue) get
+            queue <- getQueue (Seq.drop 1 . Seq.take limit . queueQueue)
             let msgStart = printf "Currently playing %s." (getUserOrTeam current)
             msg $ case Seq.null queue of
                 True -> msgStart ++ " No other entries in the queue."
                 False -> msgStart ++ printf " Next in queue: %s" (printQueue queue)
+handleCommand (RuleSet maybeMode) = do
+    currentMode <- getQueue queueMode
+    let mode = fromMaybe currentMode maybeMode
+    ruleset <- case mode of
+        Singles -> getQueue queueRulesSingles
+        Doubles -> getQueue queueRulesDoubles
+        Crew -> getQueue queueRulesCrew
+        InvalidMode garbageMode -> return $ garbageMode ++ " is not a valid mode. Choose singles, doubles, or cb."
+    msg $ printf "Rules for %s: %s"
+        (show mode)
+        ruleset
 handleCommand _ = msg "Not implemented yet!"
+
+getQueue :: (Queue -> a) -> State Queue a
+getQueue f = fmap f get
 
 printQueue :: Seq.Seq UserOrTeam -> String
 printQueue = foldr (\entry result -> result ++ getUserOrTeam entry ++ " ") ""
@@ -254,8 +277,8 @@ insert i a s = (\(l, r) -> l Seq.>< (a Seq.<| r)) $ Seq.splitAt i s
 
 endMatch :: UserOrTeam -> UserOrTeam -> State Queue (Maybe Message)
 endMatch winner loser = do
-    setWins <- fmap queueSetWins get
-    setLosses <- fmap queueSetLosses get
+    setWins <- getQueue queueSetWins
+    setLosses <- getQueue queueSetLosses
     required <- getRequiredWins
     let streamerWon = setWins >= required
     let opponentWon = setLosses >= required
@@ -307,13 +330,13 @@ getNextUp = get >>= \q -> case Seq.viewl (Seq.drop 1 $ queueQueue q) of
     _ -> return Nothing
 
 getRequiredWins :: State Queue Int
-getRequiredWins = fmap (ceiling . (/2) . fromIntegral . queueBestOf) get
+getRequiredWins = getQueue (ceiling . (/2) . fromIntegral . queueBestOf)
 
 getFriendMesForMode :: State Queue (Map.Map UserOrTeam TwitchUser)
 getFriendMesForMode = do
-    teams <- fmap queueTeams get
-    mode <- fmap queueMode get
-    friendMeUsers <- fmap (Set.toList . queueFriendMes) get
+    teams <- getQueue queueTeams
+    mode <- getQueue queueMode
+    friendMeUsers <- getQueue (Set.toList . queueFriendMes)
     return . Map.fromList . catMaybes . fmap (\k -> case getFriendMe mode teams k of
         Nothing -> Nothing
         Just userOrTeam -> Just (userOrTeam, k)) $ friendMeUsers
@@ -322,6 +345,7 @@ getFriendMesForMode = do
             Singles -> Just . generalizeUser $ friendMeUser
             Doubles -> fmap generalizeTeam . Map.lookup friendMeUser $ teams
             Crew -> Nothing -- TODO: do we need this?
+            InvalidMode garbage -> Nothing -- This should never happen
 
 userOrTeamBasedOnMode :: TwitchUser -> State Queue (Maybe UserOrTeam)
 userOrTeamBasedOnMode user = get >>= \q -> case queueMode q of

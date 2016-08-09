@@ -86,6 +86,7 @@ handleMessage conn msg q = do
                 Nothing -> return ()
             return q'
         (Message _ "PING" _) -> write conn "PONG" "xioqbot" >> return q
+        _ -> return q
 
 write :: Handle -> String -> String -> IO ()
 write h s t = do
