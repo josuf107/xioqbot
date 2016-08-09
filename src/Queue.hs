@@ -46,7 +46,7 @@ data Queue
     , queueCrewStockA :: Int
     , queueCrewStockB :: Int
     , queueFriendMes :: Set.Set TwitchUser
-    , queueIndex :: Map.Map TwitchUser (NNID, MiiName)
+    , queueIndex :: Map.Map TwitchUser (NNID, MiiName, Int, Int)
     , queueRulesSingles :: String
     , queueRulesDoubles :: String
     , queueRulesCrew :: String
@@ -124,7 +124,7 @@ setQueueCrewStockB :: QueueSet Int
 setQueueCrewStockB v = modify $ \q -> q { queueCrewStockB = v }
 withQueueFriendMes :: QueueModify (Set.Set TwitchUser)
 withQueueFriendMes f = modify $ \q -> q { queueFriendMes = f (queueFriendMes q) }
-withQueueIndex :: QueueModify (Map.Map TwitchUser (NNID, MiiName))
+withQueueIndex :: QueueModify (Map.Map TwitchUser (NNID, MiiName, Int, Int))
 withQueueIndex f = modify $ \q -> q { queueIndex = f (queueIndex q) }
 setQueueRulesSingles :: QueueSet String
 setQueueRulesSingles v = modify $ \q -> q { queueRulesSingles = v }
@@ -268,12 +268,15 @@ handleCommand (FriendClear maybeLimit) = do
     mapM_ (\userOrTeam -> maybe (return ()) (\f -> withQueueFriendMes (Set.delete f)) (Map.lookup userOrTeam friendMes)) friendMeQueue
     msg $ printf "Cleared friend list with limit %d" limit
 handleCommand (GetNNID user) = do
-    index <- getQueue queueIndex
-    msg $ case Map.lookup user index of
-        Just (nnid, _) -> printf "%s's nnid is %s" (getTwitchUser user) (getNNID nnid)
+    info <- getQueue (Map.lookup user . queueIndex)
+    msg $ case info of
+        Just (nnid, _, _, _) -> printf "%s's nnid is %s" (getTwitchUser user) (getNNID nnid)
         Nothing -> printf "%s is not in the index. Try !index nnid miiname" (getTwitchUser user)
 handleCommand (Index user nnid miid) = do
-    withQueueIndex (Map.insert user (nnid, miid))
+    currentInfo <- getQueue (Map.lookup user . queueIndex)
+    case currentInfo of
+        Nothing -> withQueueIndex (Map.insert user (nnid, miid, 0, 0))
+        Just (_, _, wins, losses) -> withQueueIndex (Map.insert user (nnid, miid, wins, losses))
     msg $ printf "Added %s to index" (getTwitchUser user)
 handleCommand (Friend user) = do
     withQueueFriendMes (Set.insert user)
@@ -308,9 +311,28 @@ handleCommand (Leave user) = do
 handleCommand (Remove userOrTeam) = removeFromQueue userOrTeam
 handleCommand (Info user) = do
     maybeInfo <- getQueue (Map.lookup user . queueIndex)
-    msg $ case maybeInfo of
-        Nothing -> printf "%s is not in the index. Add yourself with !index nnid miiName." (getTwitchUser user)
-        (Just (nnid, miiName)) -> printf "Twitch name: %s, NNID: %s, MiiName: %s." (getTwitchUser user) (getNNID nnid) (getMiiName miiName)
+    userOrTeam <- userOrTeamBasedOnMode user
+    position <- case userOrTeam of
+        Nothing -> return Nothing
+        Just userOrTeam -> getQueue (Seq.findIndexL (==userOrTeam) . queueQueue)
+    queueSize <- getQueue (Seq.length . queueQueue)
+    msg $ case (maybeInfo, position) of
+        (Nothing, _) -> printf "%s is not in the index. Add yourself with !index nnid miiName." (getTwitchUser user)
+        (Just (nnid, miiName, wins, losses), Nothing) -> printf "| %s | NNID: %s | MiiName: %s | %d:%d" 
+            (getTwitchUser user)
+            (getNNID nnid)
+            (getMiiName miiName)
+            wins
+            losses
+        (Just (nnid, miiName, wins, losses), Just position) ->
+            printf "| %s | Position %d:%d in queue | NNID: %s | MiiName: %s | %d:%d"
+                (getTwitchUser user)
+                position
+                queueSize
+                (getNNID nnid)
+                (getMiiName miiName)
+                wins
+                losses
 handleCommand (Enter user) = do
     open <- getQueue queueOpen
     indexed <- getQueue (Map.member user . queueIndex)
@@ -455,6 +477,20 @@ insert i a s = (\(l, r) -> l Seq.>< (a Seq.<| r)) $ Seq.splitAt i s
 
 endMatch :: UserOrTeam -> UserOrTeam -> State Queue (Maybe Message)
 endMatch winner loser = do
+    mode <- getQueue queueMode
+    case mode of
+        Singles -> do
+            let winnerUser = TwitchUser . getUserOrTeam $ winner
+            let loserUser = TwitchUser . getUserOrTeam $ loser
+            winnerInfo <- getQueue (Map.lookup winnerUser . queueIndex)
+            case winnerInfo of
+                Nothing -> return ()
+                Just (nnid, miiname, wins, losses) -> withQueueIndex (Map.insert winnerUser (nnid, miiname, wins + 1, losses))
+            loserInfo <- getQueue (Map.lookup loserUser . queueIndex)
+            case loserInfo of
+                Nothing -> return ()
+                Just (nnid, miiname, wins, losses) -> withQueueIndex (Map.insert loserUser (nnid, miiname, wins, losses + 1))
+        _ -> return () -- We don't count doubles wins/losses
     setWins <- getQueue queueSetWins
     setLosses <- getQueue queueSetLosses
     required <- getRequiredWins
