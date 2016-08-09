@@ -166,7 +166,7 @@ commands =
     , restrictedCmd "reenterwait" (ReenterWait <$> intOrOffP)
         "Sets the number of minutes a player must wait before re-entering a queue (can be a number or off)"
     , restrictedCmd "herealert" (HereTimeout <$> intOrOffP)
-        "Sets the numbe of seconds a player has to respond to rollcall with !here (can be a number or off)"
+        "Sets the number of seconds a player has to respond to rollcall with !here (can be a number or off)"
     , restrictedCmd "singlesbestof" (BestOf Singles <$> intP)
         "Sets the \"best of\" for a singles set"
     , restrictedCmd "doublesbestof" (BestOf Doubles <$> intP)
