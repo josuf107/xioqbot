@@ -196,7 +196,7 @@ modeP = spaceP >> choice
 mapStringP s r = string s >> return r
 userP = typedIdentifierP TwitchUser
 nnidP = typedIdentifierP NNID
-miiP = typedIdentifierP MiiName
+miiP = fmap MiiName remainderP
 userOrTeamP = typedIdentifierP UserOrTeam
 teamP = typedIdentifierP TeamName
 typedIdentifierP t = spaceP >> (fmap t $ many1 (satisfy (/=' ')))
