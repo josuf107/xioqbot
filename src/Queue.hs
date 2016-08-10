@@ -314,7 +314,7 @@ handleCommand (Info user) = do
     userOrTeam <- userOrTeamBasedOnMode user
     position <- case userOrTeam of
         Nothing -> return Nothing
-        Just userOrTeam -> getQueue (Seq.findIndexL (==userOrTeam) . queueQueue)
+        Just userOrTeam -> getQueue (fmap (+1) . Seq.findIndexL (==userOrTeam) . queueQueue)
     queueSize <- getQueue (Seq.length . queueQueue)
     msg $ case (maybeInfo, position) of
         (Nothing, _) -> printf "%s is not in the index. Add yourself with !index nnid miiName." (getTwitchUser user)
