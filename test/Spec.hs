@@ -20,6 +20,16 @@ tests =
         user "a" "!index annid amiiname"
         user "a" "!enter"
         botSay "Added a to the queue! You are at position 1"
+    , test "Non-enqueued info output formatted properly" $ do
+        user "xio" "!index xionnid xiomii"
+        user "xio" "!info"
+        botSay "| User: xio | NNID: xionnid | MiiName: xiomii | W:L 0:0 |"
+    , test "Enqueued info output formatted properly" $ do
+        streamer "!smash open"
+        user "xio" "!index xionnid xiomii"
+        user "xio" "!enter"
+        user "xio" "!info"
+        botSay "| User: xio | Position 1/1 in Queue | NNID: xionnid | MiiName: xiomii | W:L 0:0 |"
     ]
 
 main :: IO ()
