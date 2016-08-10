@@ -5,6 +5,41 @@ import Control.Monad.Writer
 import Control.Monad.State
 import Data.Monoid
 import Data.Time
+import System.Exit
+
+tests =
+    [ test "Can't enter closed queue" $ do
+        user "a" "!enter"
+        botSay "Sorry the queue is closed so you can't !enter. Use !smash open to open the queue."
+    , test "Can't enter non-indexed user" $ do
+        streamer "!smash open"
+        user "a" "!enter"
+        botSay "a is not in the index. Add yourself with !index nnid miiName."
+    , test "Can enter indexed users into open queue" $ do
+        streamer "!smash open"
+        user "a" "!index annid amiiname"
+        user "a" "!enter"
+        botSay "Added a to the queue! You are at position 1"
+    ]
+
+main :: IO ()
+main = do
+    putStrLn "\nRunning test suite..."
+    results <- mapM runTest tests
+    when (any (/=Pass) results) exitFailure
+
+test desc spec = Test spec desc
+wait :: Seconds -> TestSpec
+wait = tellOne . Wait
+streamer :: String -> TestSpec
+streamer = tellOne . StreamerSay
+user :: String -> String -> TestSpec
+user u = tellOne . UserSay (TwitchUser u)
+botSay :: String -> TestSpec
+botSay = tellOne . BotSay . Just
+botSayNothing :: TestSpec
+botSayNothing = tellOne (BotSay Nothing)
+tellOne = tell . return
 
 data TestStep
     = Wait Seconds
@@ -22,40 +57,19 @@ data Test = Test
 
 data TestResult = Pass | Fail String deriving (Show, Eq, Ord)
 
-main :: IO ()
-main = mapM_ runTest
-    [ test "Can't enter closed queue" $ do
-        user "a" "!enter"
-        botSay "Sorry the queue is closed so you can't !enter. Use !smash open to open the queue."
-    , test "Can't enter non-indexed user" $ do
-        streamer "!smash open"
-        user "a" "!enter"
-        botSay "a is not in the index. Add yourself with !index nnid miiName."
-    , test "Can enter indexed users into open queue" $ do
-        streamer "!smash open"
-        user "a" "!index annid amiiname"
-        user "a" "!enter"
-        botSay "Added a to the queue! You are at position 1"
-    ]
+data TestState = TestState
+    { testStateTime :: UTCTime
+    , testStateQueue :: Queue
+    , testStateLastMessage :: Maybe String
+    } deriving (Show, Eq, Ord)
 
-test desc spec = Test spec desc
-wait :: Seconds -> TestSpec
-wait = tellOne . Wait
-streamer :: String -> TestSpec
-streamer = tellOne . StreamerSay
-user :: String -> String -> TestSpec
-user u = tellOne . UserSay (TwitchUser u)
-botSay :: String -> TestSpec
-botSay = tellOne . BotSay . Just
-botSayNothing :: TestSpec
-botSayNothing = tellOne (BotSay Nothing)
-tellOne = tell . return
-
-runTest :: Test -> IO ()
-runTest t =
-    putStrLn $ case runTestSpec (testSpec t) of
+runTest :: Test -> IO TestResult
+runTest t = do
+    let result = runTestSpec (testSpec t)
+    putStrLn $ case result of
         Pass -> testDescription t ++ ": Passed!"
         Fail s -> testDescription t ++ ": Failed! " ++ s
+    return result
 
 runTestSpec :: TestSpec -> TestResult
 runTestSpec spec = runSteps . snd . runWriter $ spec
@@ -70,12 +84,6 @@ testStateStart = TestState
     (UTCTime (fromGregorian 2016 8 10) 0)
     defaultQueue
     Nothing
-
-data TestState = TestState
-    { testStateTime :: UTCTime
-    , testStateQueue :: Queue
-    , testStateLastMessage :: Maybe String
-    } deriving (Show, Eq, Ord)
 
 runStep :: TestStep -> State TestState TestResult
 runStep (Wait n) = do
