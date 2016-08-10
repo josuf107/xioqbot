@@ -318,14 +318,14 @@ handleCommand (Info user) = do
     queueSize <- getQueue (Seq.length . queueQueue)
     msg $ case (maybeInfo, position) of
         (Nothing, _) -> printf "%s is not in the index. Add yourself with !index nnid miiName." (getTwitchUser user)
-        (Just (nnid, miiName, wins, losses), Nothing) -> printf "| %s | NNID: %s | MiiName: %s | %d:%d" 
+        (Just (nnid, miiName, wins, losses), Nothing) -> printf "| User: %s | NNID: %s | MiiName: %s | W:L %d:%d |" 
             (getTwitchUser user)
             (getNNID nnid)
             (getMiiName miiName)
             wins
             losses
         (Just (nnid, miiName, wins, losses), Just position) ->
-            printf "| %s | Position %d:%d in queue | NNID: %s | MiiName: %s | %d:%d"
+            printf "| User: %s | Position %d/%d in Queue | NNID: %s | MiiName: %s | W:L %d:%d |"
                 (getTwitchUser user)
                 position
                 queueSize
