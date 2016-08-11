@@ -39,18 +39,50 @@ tests =
     , test "Unknown !nnid formatted properly" $ do
         user "xio" "!nnid"
         botSay "xio is not in the index. Try !index NNID MiiName."
-    , test "Start formatted properly" $ do
+    , test "Start Singles (one in queue)" $ do
         streamer "!smash open"
         indexAndEnter "xio"
         streamer "!smash start"
         botSay "The first match is beginning and the opponent is xio (xiomiiname)!"
-    , test "Start formatted properly (two in queue)" $ do
+    , test "Start Singles (two in queue)" $ do
         streamer "!smash open"
         indexAndEnter "xio"
         indexAndEnter "zio"
         streamer "!smash start"
         botSay "The first match is beginning and the opponent is xio (xiomiiname)! Next up is zio (ziomiiname)!"
-    , test "Start formatted properly (empty queue)" $ do
+    , test "Start Singles (empty queue)" $ do
+        streamer "!smash open"
+        streamer "!smash start"
+        botSay "Can't start because the queue is empty!"
+    , test "Start Doubles (one in queue)" $ do
+        streamer "!smash mode doubles"
+        streamer "!smash open"
+        index "xio"
+        index "zio"
+        user "xio" "!teamcreate xioteam"
+        user "xio" "!teaminv zio"
+        user "zio" "!accept xioteam"
+        user "xio" "!enter"
+        streamer "!smash start"
+        botSay "The first match is beginning and the opponent is xioteam (xiomiiname & ziomiiname)!"
+    , test "Start Doubles (two in queue)" $ do
+        streamer "!smash mode doubles"
+        streamer "!smash open"
+        index "xio"
+        index "zio"
+        user "xio" "!teamcreate xioteam"
+        user "xio" "!teaminv zio"
+        user "zio" "!accept xioteam"
+        user "xio" "!enter"
+        index "foo"
+        index "bar"
+        user "foo" "!teamcreate footeam"
+        user "foo" "!teaminv bar"
+        user "bar" "!accept footeam"
+        user "foo" "!enter"
+        streamer "!smash start"
+        botSay "The first match is beginning and the opponent is xioteam (xiomiiname & ziomiiname)! Next up is footeam (barmiiname & foomiiname)!"
+    , test "Start Doubles (empty queue)" $ do
         streamer "!smash open"
         streamer "!smash start"
         botSay "Can't start because the queue is empty!"
@@ -72,8 +104,10 @@ tests =
         botSay "Skipped xio. Next up is zio (ziomiiname)!"
     ]
 
-indexAndEnter u = do
+index u = do
     user u ("!index " ++ u ++ "nnid " ++ u ++ "miiname")
+indexAndEnter u = do
+    index u
     user u "!enter"
 
 main :: IO ()
