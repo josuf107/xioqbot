@@ -50,15 +50,12 @@ parseMessage msg = case readP_to_S messageP msg of
 
 twitchServer = "irc.chat.twitch.tv"
 twitchPort = 6667
-twitchToken = "oauth:tw3kl6ia2b7cwe8brhje3lly81t3ro"
-twitchUser = "xioqbot"
-twitchChannel = "#josuf107"
 
 connectTwitch :: IO Handle
 connectTwitch = connectTo twitchServer (PortNumber twitchPort)
 
-talk :: IO ()
-talk = do
+talk :: String -> String -> String -> IO ()
+talk twitchUser twitchToken twitchChannel = do
     conn <- connectTwitch
     hSetBuffering conn NoBuffering
     write conn "PASS" twitchToken
@@ -66,16 +63,16 @@ talk = do
     write conn "JOIN" twitchChannel
     replicateM_ 10 $ hGetLine conn >>= putStrLn
     write conn "PRIVMSG" (twitchChannel ++ " :Hi everybody")
-    handleMessages conn defaultQueue
+    handleMessages twitchChannel conn defaultQueue
 
-handleMessages :: Handle -> Queue -> IO ()
-handleMessages conn q = do
+handleMessages :: String -> Handle -> Queue -> IO ()
+handleMessages twitchChannel conn q = do
     nextLine <- hGetLine conn
-    q' <- handleMessage conn nextLine q
-    handleMessages conn q'
+    q' <- handleMessage twitchChannel conn nextLine q
+    handleMessages twitchChannel conn q'
 
-handleMessage :: Handle -> String -> Queue -> IO Queue
-handleMessage conn msg q = do
+handleMessage :: String -> Handle -> String -> Queue -> IO Queue
+handleMessage twitchChannel conn msg q = do
     time <- getCurrentTime
     putStrLn msg
     case parseMessage msg of
