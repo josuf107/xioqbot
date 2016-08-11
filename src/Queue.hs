@@ -6,15 +6,16 @@ import Command
 
 import Control.Monad
 import Control.Monad.State
-import Data.Tuple
-import Data.Time
+import Data.Foldable
+import Data.List hiding (insert)
 import Data.Maybe
 import Data.Monoid
-import Data.Foldable
-import qualified Data.Map as Map
-import qualified Data.Set as Set
-import qualified Data.Sequence as Seq
+import Data.Time
+import Data.Tuple
 import Text.Printf
+import qualified Data.Map as Map
+import qualified Data.Sequence as Seq
+import qualified Data.Set as Set
 
 test :: IO ()
 test = go defaultQueue
@@ -209,12 +210,26 @@ handleCommand Close = do
     msg "The queue is closed"
 handleCommand Start = do
     current <- getCurrentTip
+    currentMiis <- maybe (return Nothing) (fmap return . getMiiNames) current
     next <- getNextUp
-    msg $ case (current, next) of
-        (Just current, Just next) -> printf
-            "First match against %s! Next up is %s" (getUserOrTeam current) (getUserOrTeam next)
-        (Just current, Nothing) -> printf "First match against %s!" (getUserOrTeam current)
-        (Nothing, _) -> "Can't start because the queue is empty!"
+    nextMiis <- maybe (return Nothing) (fmap return . getMiiNames) next
+    let miiNamesMissingTemplate = "MiiNames missing for %s. Please add them with !index."
+    msg $ case (current, currentMiis, next, nextMiis) of
+        (Just current, Just [], _, _) -> printf miiNamesMissingTemplate
+            (getUserOrTeam current)
+        (_, _,  Just next, Just []) -> printf miiNamesMissingTemplate
+            (getUserOrTeam next)
+        (Just current, Nothing, _, _) -> printf miiNamesMissingTemplate
+            (getUserOrTeam current)
+        (_, _,  Just next, Nothing) -> printf miiNamesMissingTemplate
+            (getUserOrTeam next)
+        (Just current, Just currentMiis, Just next, Just nextMiis) -> printf
+            "The first match is beginning and the opponent is %s! Next up is %s!"
+            (userOrTeamAndMiis current currentMiis)
+            (userOrTeamAndMiis next nextMiis)
+        (Just current, Just currentMiis, Nothing, _) -> printf "The first match is beginning and the opponent is %s!"
+            (userOrTeamAndMiis current currentMiis)
+        (Nothing, _, _, _) -> "Can't start because the queue is empty!"
 handleCommand Win = do
     opponent <- getCurrentTip
     streamerUser <- getQueue queueStreamer
@@ -241,12 +256,13 @@ handleCommand Skip = do
     withQueueSetLosses (const 0)
     withQueueQueue (Seq.drop 1)
     current <- getCurrentTip
+    currentMiis <- maybe (return []) getMiiNames current
     msg $ case (skipped, current) of
         (Nothing, _) -> "The queue is empty. No one to skip"
         (Just skipped, Nothing) -> printf "Skipped %s. The queue is now empty" (getUserOrTeam skipped)
         (Just skipped, Just current) -> printf "Skipped %s. Next up is %s!"
             (getUserOrTeam skipped)
-            (getUserOrTeam current)
+            (userOrTeamAndMiis current currentMiis)
 handleCommand (Move target rank) = do
     withQueueQueue (Seq.filter (/=target))
     withQueueQueue (insert rank target)
@@ -344,7 +360,7 @@ handleCommand (Enter user) = do
         (_, _, Just userOrTeam) -> do
             withQueueQueue (Seq.|> userOrTeam)
             position <- getQueue (Seq.length . queueQueue)
-            msg $ printf "Added %s to the queue! You are at position %d"
+            msg $ printf "Added %s to the queue! You are at position %d!"
                 (getUserOrTeam userOrTeam)
                         position
 handleCommand (Here user) = do
@@ -502,14 +518,15 @@ endMatch winner loser = do
             withQueueSetLosses (const 0)
             withQueueQueue (Seq.drop 1)
             current <- getCurrentTip
+            currentMiis <- maybe (return []) getMiiNames current
             let winAndScoreMsg = printf "%s has won the set against %s! The score was %d:%d."
                     (getUserOrTeam winner)
                     (getUserOrTeam loser)
                     setWins
                     setLosses
             msg $ case current of
-                Just current -> printf (winAndScoreMsg ++ " Next up is %s")
-                    (getUserOrTeam current)
+                Just current -> printf (winAndScoreMsg ++ " Next up is %s!")
+                    (userOrTeamAndMiis current currentMiis)
                 Nothing -> winAndScoreMsg
         else
             msg $ printf "%s has just won a match against %s! The score is %d:%d and it requires %d to take the set"
@@ -566,6 +583,32 @@ getFriendMesForMode = do
             Doubles -> fmap generalizeTeam . Map.lookup friendMeUser $ teams
             Crew -> Nothing -- TODO: do we need this?
             InvalidMode garbage -> Nothing -- This should never happen
+
+getMiiNames :: UserOrTeam -> State Queue [MiiName]
+getMiiNames userOrTeam = do
+    mode <- getQueue queueMode
+    case mode of
+        Singles -> do
+            let user = TwitchUser . getUserOrTeam $ userOrTeam
+            lookupMii user
+        Doubles -> do
+            let team = TeamName . getUserOrTeam $ userOrTeam
+            users <- getQueue (Map.keys . Map.filter (==team) . queueTeams)
+            fmap concat (mapM lookupMii users)
+        Crew -> return [] -- TODO: Crew
+        InvalidMode _ -> return [] -- Shrug
+    where
+        extractMiiName (_, mii, _, _) = mii
+        lookupMii user = getQueue (fmap extractMiiName . maybeToList . Map.lookup user . queueIndex)
+
+listMiiNames :: [MiiName] -> String
+listMiiNames = intercalate " & " . fmap getMiiName
+
+userOrTeamAndMiis :: UserOrTeam -> [MiiName] -> String
+userOrTeamAndMiis userOrTeam [] = printf "%s" (getUserOrTeam userOrTeam)
+userOrTeamAndMiis userOrTeam miis = printf "%s (%s)"
+    (getUserOrTeam userOrTeam)
+    (listMiiNames miis)
 
 userOrTeamBasedOnMode :: TwitchUser -> State Queue (Maybe UserOrTeam)
 userOrTeamBasedOnMode user = get >>= \q -> case queueMode q of
