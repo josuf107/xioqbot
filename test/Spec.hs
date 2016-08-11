@@ -14,7 +14,7 @@ tests =
     , test "Can't enter non-indexed user" $ do
         streamer "!smash open"
         user "a" "!enter"
-        botSay "a is not in the index. Add yourself with !index nnid miiName."
+        botSay "a is not in the index. Add yourself with !index NNID MiiName."
     , test "Can enter indexed users into open queue" $ do
         streamer "!smash open"
         user "a" "!index annid amiiname"
@@ -30,6 +30,16 @@ tests =
         user "xio" "!enter"
         user "xio" "!info"
         botSay "| User: xio | Position 1/1 in Queue | NNID: xionnid | MiiName: xiomii | W:L 0:0 |"
+    , test "Absent !info output formatted properly" $ do
+        user "xio" "!info"
+        botSay "xio is not in the index. Add yourself with !index NNID MiiName."
+    , test "Known !nnid formatted properly" $ do
+        user "xio" "!index xionnid xiomii"
+        user "xio" "!nnid"
+        botSay "xio's NNID is xionnid."
+    , test "Unknown !nnid formatted properly" $ do
+        user "xio" "!nnid"
+        botSay "xio is not in the index. Try !index NNID MiiName."
     ]
 
 main :: IO ()
