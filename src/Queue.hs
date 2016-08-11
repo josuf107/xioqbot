@@ -270,8 +270,8 @@ handleCommand (FriendClear maybeLimit) = do
 handleCommand (GetNNID user) = do
     info <- getQueue (Map.lookup user . queueIndex)
     msg $ case info of
-        Just (nnid, _, _, _) -> printf "%s's nnid is %s" (getTwitchUser user) (getNNID nnid)
-        Nothing -> printf "%s is not in the index. Try !index nnid miiname" (getTwitchUser user)
+        Just (nnid, _, _, _) -> printf "%s's NNID is %s." (getTwitchUser user) (getNNID nnid)
+        Nothing -> printf "%s is not in the index. Try !index NNID MiiName." (getTwitchUser user)
 handleCommand (Index user nnid miid) = do
     currentInfo <- getQueue (Map.lookup user . queueIndex)
     case currentInfo of
@@ -317,7 +317,7 @@ handleCommand (Info user) = do
         Just userOrTeam -> getQueue (fmap (+1) . Seq.findIndexL (==userOrTeam) . queueQueue)
     queueSize <- getQueue (Seq.length . queueQueue)
     msg $ case (maybeInfo, position) of
-        (Nothing, _) -> printf "%s is not in the index. Add yourself with !index nnid miiName." (getTwitchUser user)
+        (Nothing, _) -> printf "%s is not in the index. Add yourself with !index NNID MiiName." (getTwitchUser user)
         (Just (nnid, miiName, wins, losses), Nothing) -> printf "| User: %s | NNID: %s | MiiName: %s | W:L %d:%d |" 
             (getTwitchUser user)
             (getNNID nnid)
@@ -339,7 +339,7 @@ handleCommand (Enter user) = do
     maybeUserOrTeam <- userOrTeamBasedOnMode user
     case (open, indexed, maybeUserOrTeam) of
         (False, _, _) -> msg "Sorry the queue is closed so you can't !enter. Use !smash open to open the queue."
-        (_, False, _) -> msg $ printf "%s is not in the index. Add yourself with !index nnid miiName." (getTwitchUser user)
+        (_, False, _) -> msg $ printf "%s is not in the index. Add yourself with !index NNID MiiName." (getTwitchUser user)
         (_, _, Nothing) -> msg $ printf "Couldn't add %s to queue. Try joining a team." (getTwitchUser user)
         (_, _, Just userOrTeam) -> do
             withQueueQueue (Seq.|> userOrTeam)
