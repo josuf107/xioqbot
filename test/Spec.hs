@@ -17,8 +17,7 @@ tests =
         botSay "a is not in the index. Add yourself with !index NNID MiiName."
     , test "Can enter indexed users into open queue" $ do
         streamer "!smash open"
-        user "a" "!index annid amiiname"
-        user "a" "!enter"
+        indexAndEnter "a"
         botSay "Added a to the queue! You are at position 1"
     , test "Non-enqueued info output formatted properly" $ do
         user "xio" "!index xionnid xiomii"
@@ -40,7 +39,42 @@ tests =
     , test "Unknown !nnid formatted properly" $ do
         user "xio" "!nnid"
         botSay "xio is not in the index. Try !index NNID MiiName."
+    , test "Start formatted properly" $ do
+        streamer "!smash open"
+        indexAndEnter "xio"
+        streamer "!smash start"
+        botSay "First match against xio (xiomiiname)!"
+    , test "Start formatted properly (two in queue)" $ do
+        streamer "!smash open"
+        indexAndEnter "xio"
+        indexAndEnter "zio"
+        streamer "!smash start"
+        botSay "First match against xio (xiomiiname)! Next up is zio (ziomiiname)!"
+    , test "Start formatted properly (empty queue)" $ do
+        streamer "!smash open"
+        streamer "!smash start"
+        botSay "Can't start because the queue is empty!"
+    , test "Win formatted properly (streamer takes set; two in queue)" $ do
+        streamer "!smash open"
+        indexAndEnter "xio"
+        indexAndEnter "zio"
+        streamer "!smash start"
+        streamer "!win"
+        streamer "!lose"
+        streamer "!win"
+        botSay "josuf107 has won the set against xio! The score was 2:1. Next up is zio (ziomiiname)!"
+    , test "Skip formatted properly (two in queue)" $ do
+        streamer "!smash open"
+        indexAndEnter "xio"
+        indexAndEnter "zio"
+        streamer "!smash start"
+        streamer "!smash skip"
+        botSay "Skipped xio. Next up is zio (ziomiiname)!"
     ]
+
+indexAndEnter u = do
+    user u ("!index " ++ u ++ "nnid " ++ u ++ "miiname")
+    user u "!enter"
 
 main :: IO ()
 main = do
