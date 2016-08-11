@@ -11,6 +11,7 @@ import Text.ParserCombinators.ReadP
 
 import Command hiding (spaceP, commandP)
 import Queue hiding (spaceP, commandP, Message)
+import Persist
 
 data Message
     = Message
@@ -56,6 +57,11 @@ connectTwitch = connectTo twitchServer (PortNumber twitchPort)
 
 talk :: String -> String -> String -> IO ()
 talk twitchUser twitchToken twitchChannel = do
+    putStrLn "Loading saved queue file"
+    maybeQueue <- loadMostRecentQueue
+    queue <- case maybeQueue of
+        Left errorMessage -> putStrLn errorMessage >> return defaultQueue
+        Right q -> return q
     conn <- connectTwitch
     hSetBuffering conn NoBuffering
     write conn "PASS" twitchToken
@@ -63,7 +69,7 @@ talk twitchUser twitchToken twitchChannel = do
     write conn "JOIN" twitchChannel
     replicateM_ 10 $ hGetLine conn >>= putStrLn
     write conn "PRIVMSG" (twitchChannel ++ " :Hi everybody")
-    handleMessages twitchChannel conn defaultQueue
+    handleMessages twitchChannel conn queue
 
 handleMessages :: String -> Handle -> Queue -> IO ()
 handleMessages twitchChannel conn q = do
@@ -80,6 +86,7 @@ handleMessage twitchChannel conn msg q = do
             let user = TwitchUser userString
             let cmd = parseCommand user (reverse . drop 1 . reverse . unwords $ params)
             let (q', maybeReturnMessage) = handleTimestamped user time cmd q
+            when (queueIndex q /= queueIndex q') (snapshotQueue q')
             case maybeReturnMessage of
                 Just returnMessage -> write conn "PRIVMSG" (twitchChannel ++ " :" ++ returnMessage)
                 Nothing -> return ()
