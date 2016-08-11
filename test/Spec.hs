@@ -18,7 +18,7 @@ tests =
     , test "Can enter indexed users into open queue" $ do
         streamer "!smash open"
         indexAndEnter "a"
-        botSay "Added a to the queue! You are at position 1"
+        botSay "Added a to the queue! You are at position 1!"
     , test "Non-enqueued info output formatted properly" $ do
         user "xio" "!index xionnid xiomii"
         user "xio" "!info"
@@ -43,13 +43,13 @@ tests =
         streamer "!smash open"
         indexAndEnter "xio"
         streamer "!smash start"
-        botSay "First match against xio (xiomiiname)!"
+        botSay "The first match is beginning and the opponent is xio (xiomiiname)!"
     , test "Start formatted properly (two in queue)" $ do
         streamer "!smash open"
         indexAndEnter "xio"
         indexAndEnter "zio"
         streamer "!smash start"
-        botSay "First match against xio (xiomiiname)! Next up is zio (ziomiiname)!"
+        botSay "The first match is beginning and the opponent is xio (xiomiiname)! Next up is zio (ziomiiname)!"
     , test "Start formatted properly (empty queue)" $ do
         streamer "!smash open"
         streamer "!smash start"
