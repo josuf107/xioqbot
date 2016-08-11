@@ -10,7 +10,7 @@ import System.Exit
 tests =
     [ test "Can't enter closed queue" $ do
         user "a" "!enter"
-        botSay "Sorry the queue is closed so you can't !enter. Use !smash open to open the queue."
+        botSay "Sorry the queue is closed so you can't !enter. An admin must use !smash open to open the queue."
     , test "Can't enter non-indexed user" $ do
         streamer "!smash open"
         user "a" "!enter"
@@ -18,7 +18,7 @@ tests =
     , test "Can enter indexed users into open queue" $ do
         streamer "!smash open"
         indexAndEnter "a"
-        botSay "Added a to the queue! You are at position 1!"
+        botSay "a, you've now been placed into the queue at position 1! Type !info to see your position and !friendme if you've yet to add Xio.""
     , test "Non-enqueued info output formatted properly" $ do
         user "xio" "!index xionnid xiomii"
         user "xio" "!info"
