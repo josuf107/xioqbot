@@ -21,7 +21,7 @@ loadMostRecentQueue :: IO (Either String Queue)
 loadMostRecentQueue = do
     queueFiles <- fmap (filter (`notElem` [".", ".."])) (getDirectoryContents "data")
     case reverse (sort queueFiles) of
-        (queueFile:_) -> fmap decodeQueue (BS.readFile queueFile)
+        (queueFile:_) -> fmap decodeQueue (BS.readFile $ "data/" ++ queueFile)
         [] -> return $ Left "No snapshots"
 
 encodeQueue :: Queue -> BS.ByteString
