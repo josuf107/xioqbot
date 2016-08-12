@@ -520,20 +520,6 @@ insert i a s = (\(l, r) -> l Seq.>< (a Seq.<| r)) $ Seq.splitAt i s
 
 endMatch :: UserOrTeam -> UserOrTeam -> State Queue (Maybe Message)
 endMatch winner loser = do
-    mode <- getQueue queueMode
-    case mode of
-        Singles -> do
-            let winnerUser = twitchUser . getUserOrTeam $ winner
-            let loserUser = twitchUser . getUserOrTeam $ loser
-            winnerInfo <- getQueue (Map.lookup winnerUser . queueIndex)
-            case winnerInfo of
-                Nothing -> return ()
-                Just (nnid, miiname, wins, losses) -> withQueueIndex (Map.insert winnerUser (nnid, miiname, wins + 1, losses))
-            loserInfo <- getQueue (Map.lookup loserUser . queueIndex)
-            case loserInfo of
-                Nothing -> return ()
-                Just (nnid, miiname, wins, losses) -> withQueueIndex (Map.insert loserUser (nnid, miiname, wins, losses + 1))
-        _ -> return () -- We don't count doubles wins/losses
     setWins <- getQueue queueSetWins
     setLosses <- getQueue queueSetLosses
     required <- getRequiredWins
@@ -544,6 +530,20 @@ endMatch winner loser = do
             withQueueSetWins (const 0)
             withQueueSetLosses (const 0)
             withQueueQueue (Seq.drop 1)
+            mode <- getQueue queueMode
+            case mode of
+                Singles -> do
+                    let winnerUser = twitchUser . getUserOrTeam $ winner
+                    let loserUser = twitchUser . getUserOrTeam $ loser
+                    winnerInfo <- getQueue (Map.lookup winnerUser . queueIndex)
+                    case winnerInfo of
+                        Nothing -> return ()
+                        Just (nnid, miiname, wins, losses) -> withQueueIndex (Map.insert winnerUser (nnid, miiname, wins + 1, losses))
+                    loserInfo <- getQueue (Map.lookup loserUser . queueIndex)
+                    case loserInfo of
+                        Nothing -> return ()
+                        Just (nnid, miiname, wins, losses) -> withQueueIndex (Map.insert loserUser (nnid, miiname, wins, losses + 1))
+                _ -> return () -- We don't count doubles wins/losses
             current <- getCurrentTip
             currentDisplay <- maybe (return Nothing) (fmap Just . displayUserOrTeam)  current
             let winAndScoreMsg = printf "%s has won the set against %s! The score was %d:%d."
