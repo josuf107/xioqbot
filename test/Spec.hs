@@ -8,7 +8,196 @@ import Data.Time
 import System.Exit
 
 tests =
-    [ test "Can't enter closed queue" $ do
+    [ test "Off" $ do
+        streamer "!smash off"
+        botSay "qbot disabled. !smash on to re-enable"
+    , test "Off ignores commands" $ do
+        streamer "!smash off"
+        streamer "!info"
+        botSayNothing
+    , test "On" $ do
+        streamer "!smash on"
+        botSay "qbot enabled. Hello everyone!"
+    , test "On turns on" $ do
+        streamer "!smash off"
+        streamer "!smash on"
+        botSay "qbot enabled. Hello everyone!"
+    , test "Mode singles" $ do
+        streamer "!smash mode singles"
+        botSay "New mode is: Singles"
+    , test "Mode doubles" $ do
+        streamer "!smash mode doubles"
+        botSay "New mode is: Doubles"
+    , test "Mode crew" $ do
+        streamer "!smash mode cb"
+        botSay "New mode is: Crew"
+    , test "Allow" $ do
+        streamer "!smash allow xio"
+        botSay "Added admin: Xio"
+    , test "Allow allows" $ do
+        streamer "!smash allow xio"
+        xio "!smash off"
+        botSay "qbot disabled. !smash on to re-enable"
+    , test "Deny" $ do
+        streamer "!smash deny xio"
+        botSay "Removed admin: Xio"
+    , test "Deny denies" $ do
+        streamer "!smash allow xio"
+        streamer "!smash deny xio"
+        xio "!smash off"
+        botSay "Xio is not allowed to perform command: smash off"
+    , test "Restrict" $ do
+        streamer "!smash restrict enter"
+        botSay "Restricted command: enter"
+    , test "Restrict restricts" $ do
+        streamer "!smash restrict enter"
+        xio "!enter"
+        botSay "Xio is not allowed to perform command: enter"
+    , test "Unrestrict" $ do
+        streamer "!smash unrestrict enter"
+        botSay "Unrestricted command: enter"
+    , test "Unrestrict unrestricts" $ do
+        streamer "!smash restrict enter"
+        streamer "!smash unrestrict enter"
+        xio "!enter"
+        botSay "Sorry the queue is closed so you can't !enter. An admin must use !smash open to open the queue."
+    , test "New" $ do
+        streamer "!smash new"
+        botSay "Created a new queue!"
+    , test "New clears queue" $ do
+        streamer "!smash open"
+        indexAndEnter "xio"
+        streamer "!smash new"
+        streamer "!list"
+        botSay "Queue is empty."
+    , test "Open" $ do
+        streamer "!smash open"
+        botSay "The queue is open! Type !enter to enter"
+    , test "Open opens the queue" $ do
+        streamer "!smash open"
+        indexAndEnter "xio"
+        botSay "Xio, you've now been placed into the queue at position 1! Type !info to see your position and !friendme if you've yet to add Josuf107."
+    , test "Close" $ do
+        streamer "!smash close"
+        botSay "The queue is closed"
+    , test "Close closes" $ do
+        streamer "!smash open"
+        streamer "!smash close"
+        indexAndEnter "xio"
+        botSay "Sorry the queue is closed so you can't !enter. An admin must use !smash open to open the queue."
+    , test "Start (singles; one in queue)" $ do
+        streamer "!smash open"
+        indexAndEnter "xio"
+        streamer "!smash start"
+        botSay "The first match is beginning and the opponent is Xio (xiomiiname)!"
+    , test "Start (singles; two in queue)" $ do
+        streamer "!smash open"
+        indexAndEnter "xio"
+        indexAndEnter "zio"
+        streamer "!smash start"
+        botSay "The first match is beginning and the opponent is Xio (xiomiiname)! Next up is Zio (ziomiiname)!"
+    , test "Start (singles; empty queue)" $ do
+        streamer "!smash open"
+        streamer "!smash start"
+        botSay "Can't start because the queue is empty!"
+    , test "Start (doubles; one in queue)" $ do
+        streamer "!smash mode doubles"
+        streamer "!smash open"
+        index "xio"
+        index "zio"
+        user "xio" "!teamcreate xioteam"
+        user "xio" "!teaminv zio"
+        user "zio" "!accept xioteam"
+        user "xio" "!enter"
+        streamer "!smash start"
+        botSay "The first match is beginning and the opponent is xioteam (xiomiiname & ziomiiname)!"
+    , test "Start (doubles; two in queue)" $ do
+        streamer "!smash mode doubles"
+        streamer "!smash open"
+        index "xio"
+        index "zio"
+        user "xio" "!teamcreate xioteam"
+        user "xio" "!teaminv zio"
+        user "zio" "!accept xioteam"
+        user "xio" "!enter"
+        index "foo"
+        index "bar"
+        user "foo" "!teamcreate footeam"
+        user "foo" "!teaminv bar"
+        user "bar" "!accept footeam"
+        user "foo" "!enter"
+        streamer "!smash start"
+        botSay "The first match is beginning and the opponent is xioteam (xiomiiname & ziomiiname)! Next up is footeam (barmiiname & foomiiname)!"
+    , test "Start (doubles; empty queue)" $ do
+        streamer "!smash open"
+        streamer "!smash start"
+        botSay "Can't start because the queue is empty!"
+    , test "Win" $ do
+        streamer "!smash open"
+        indexAndEnter "xio"
+        streamer "!smash start"
+        streamer "!win"
+        botSay "Josuf107 has just won a match against Xio! The score is 1:0 and it requires 2 to take the set"
+    , test "Win (streamer takes set; two in queue)" $ do
+        streamer "!smash open"
+        indexAndEnter "xio"
+        indexAndEnter "zio"
+        streamer "!smash start"
+        streamer "!win"
+        streamer "!lose"
+        streamer "!win"
+        botSay "Josuf107 has won the set against Xio! The score was 2:1. Next up is Zio (ziomiiname)!"
+    , test "Win (streamer takes set; one in queue)" $ do
+        streamer "!smash open"
+        indexAndEnter "xio"
+        streamer "!smash start"
+        streamer "!win"
+        streamer "!lose"
+        streamer "!win"
+        botSay "Josuf107 has won the set against Xio! The score was 2:1."
+    , test "Win (doubles; streamer takes set; two in queue)" $ do
+        streamer "!smash mode doubles"
+        streamer "!smash open"
+        index "bro"
+        streamer "!teamcreate steamrollers"
+        streamer "!teaminv bro"
+        user "bro" "!accept steamrollers"
+        index "xio"
+        index "zio"
+        xio "!teamcreate xioteam"
+        xio "!teaminv zio"
+        zio "!accept xioteam"
+        xio "!enter"
+        index "a"
+        index "b"
+        user "a" "!teamcreate a-team"
+        user "a" "!teaminv b"
+        user "b" "!accept a-team"
+        user "a" "!enter"
+        streamer "!smash start"
+        streamer "!win"
+        streamer "!lose"
+        streamer "!win"
+        botSay "steamrollers has won the set against xioteam! The score was 2:1. Next up is a-team (amiiname & bmiiname)!"
+    , test "Skip (two in queue)" $ do
+        streamer "!smash open"
+        indexAndEnter "xio"
+        indexAndEnter "zio"
+        streamer "!smash start"
+        streamer "!smash skip"
+        botSay "Skipped Xio. Next up is Zio (ziomiiname)!"
+    , test "Skip (doubles; two in queue)" $ do
+        streamer "!smash mode doubles"
+        streamer "!smash open"
+        index "xio"
+        index "zio"
+        xio "!teamcreate xfactor"
+        xio "!teaminv zio"
+        zio "!accept xfactor"
+        streamer "!smash start"
+        streamer "!smash skip"
+        botSay "Skipped Xio. Next up is Zio (ziomiiname)!"
+    , test "Can't enter closed queue" $ do
         user "a" "!enter"
         botSay "Sorry the queue is closed so you can't !enter. An admin must use !smash open to open the queue."
     , test "Can't enter non-indexed user" $ do
@@ -39,71 +228,17 @@ tests =
     , test "Unknown !nnid formatted properly" $ do
         user "xio" "!nnid"
         botSay "Xio is not in the index. Try !index NNID MiiName."
-    , test "Start Singles (one in queue)" $ do
-        streamer "!smash open"
-        indexAndEnter "xio"
-        streamer "!smash start"
-        botSay "The first match is beginning and the opponent is Xio (xiomiiname)!"
-    , test "Start Singles (two in queue)" $ do
-        streamer "!smash open"
-        indexAndEnter "xio"
-        indexAndEnter "zio"
-        streamer "!smash start"
-        botSay "The first match is beginning and the opponent is Xio (xiomiiname)! Next up is Zio (ziomiiname)!"
-    , test "Start Singles (empty queue)" $ do
-        streamer "!smash open"
-        streamer "!smash start"
-        botSay "Can't start because the queue is empty!"
-    , test "Start Doubles (one in queue)" $ do
-        streamer "!smash mode doubles"
-        streamer "!smash open"
+    , test "Accept" $ do
         index "xio"
         index "zio"
-        user "xio" "!teamcreate xioteam"
-        user "xio" "!teaminv zio"
-        user "zio" "!accept xioteam"
-        user "xio" "!enter"
-        streamer "!smash start"
-        botSay "The first match is beginning and the opponent is xioteam (xiomiiname & ziomiiname)!"
-    , test "Start Doubles (two in queue)" $ do
-        streamer "!smash mode doubles"
-        streamer "!smash open"
-        index "xio"
-        index "zio"
-        user "xio" "!teamcreate xioteam"
-        user "xio" "!teaminv zio"
-        user "zio" "!accept xioteam"
-        user "xio" "!enter"
-        index "foo"
-        index "bar"
-        user "foo" "!teamcreate footeam"
-        user "foo" "!teaminv bar"
-        user "bar" "!accept footeam"
-        user "foo" "!enter"
-        streamer "!smash start"
-        botSay "The first match is beginning and the opponent is xioteam (xiomiiname & ziomiiname)! Next up is footeam (barmiiname & foomiiname)!"
-    , test "Start Doubles (empty queue)" $ do
-        streamer "!smash open"
-        streamer "!smash start"
-        botSay "Can't start because the queue is empty!"
-    , test "Win formatted properly (streamer takes set; two in queue)" $ do
-        streamer "!smash open"
-        indexAndEnter "xio"
-        indexAndEnter "zio"
-        streamer "!smash start"
-        streamer "!win"
-        streamer "!lose"
-        streamer "!win"
-        botSay "Josuf107 has won the set against Xio! The score was 2:1. Next up is Zio (ziomiiname)!"
-    , test "Skip formatted properly (two in queue)" $ do
-        streamer "!smash open"
-        indexAndEnter "xio"
-        indexAndEnter "zio"
-        streamer "!smash start"
-        streamer "!smash skip"
-        botSay "Skipped Xio. Next up is Zio (ziomiiname)!"
+        xio "!teamcreate xfactor"
+        xio "!teaminv zio"
+        zio "!accept xfactor"
+        botSay "Zio has joined team xfactor!"
     ]
 
+xio = user "xio"
+zio = user "zio"
 index u = do
     user u ("!index " ++ u ++ "nnid " ++ u ++ "miiname")
 indexAndEnter u = do
