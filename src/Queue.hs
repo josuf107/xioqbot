@@ -424,6 +424,33 @@ handleCommand (Decline user team) = do
         True -> printf "%s declined to join team %s."
             (getTwitchUser user)
             (getTeamName team)
+handleCommand (TeamInfo team) = do
+    teamMembers <- getQueue (Map.keys . Map.filter (==team) . queueTeams)
+    miiNames <- getMiiNames (generalizeTeam team)
+    case teamMembers of
+        [] -> msg $ printf "Team %s does not exist. Create it with !teamcreate." (getTeamName team)
+        (member:[]) -> handleCommand (Info member)
+        (member1:member2:_) -> do
+            info1 <- getQueue (Map.lookup member1 . queueIndex)
+            info2 <- getQueue (Map.lookup member2 . queueIndex)
+            friendme1 <- getQueue (Set.member member1 . queueFriendMes)
+            friendme2 <- getQueue (Set.member member2 . queueFriendMes)
+            let friendmeSuffix1 = if friendme1 then "+" else ""
+            let friendmeSuffix2 = if friendme2 then "+" else ""
+            msg $ case (info1, info2) of
+                (Nothing, _) -> printf "Team member %s is no longer in the index!" (getTwitchUser member1)
+                (_, Nothing) -> printf "Team member %s is no longer in the index!" (getTwitchUser member2)
+                (Just (nnid1, miiname1, _, _), Just (nnid2, miiname2, _, _)) -> printf
+                    "| %s | %s%s & %s%s | %s & %s | %s & %s |"
+                    (getTeamName team)
+                    (getTwitchUser member1)
+                    friendmeSuffix1
+                    (getTwitchUser member2)
+                    friendmeSuffix2
+                    (getNNID nnid1)
+                    (getNNID nnid2)
+                    (getMiiName miiname1)
+                    (getMiiName miiname2)
 handleCommand (LeaveTeam user) = do
     existingTeam <- getQueue (Map.lookup user . queueTeams)
     case existingTeam of

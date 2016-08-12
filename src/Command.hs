@@ -60,6 +60,7 @@ data Command
     | TeamInvite TwitchUser TwitchUser
     | Accept TwitchUser TeamName
     | Decline TwitchUser TeamName
+    | TeamInfo TeamName
     | LeaveTeam TwitchUser
     -- crew
     | CrewStocks
@@ -143,6 +144,8 @@ commands =
         "Accept an invitation to the given team"
     , userCmd "decline" (\user -> Decline user <$> teamP)
         "Decline an invitation to the given team"
+    , cmd "team" (TeamInfo <$> teamP)
+        "Show team info for the given team"
     , userCmd "teamleave" (return . LeaveTeam)
         "Leave your current team"
     , cmd "stocks" (return CrewStocks)
