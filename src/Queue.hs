@@ -349,12 +349,16 @@ handleCommand (Enter user) = do
     open <- getQueue queueOpen
     indexed <- getQueue (Map.member user . queueIndex)
     maybeUserOrTeam <- userOrTeamBasedOnMode user
+    queue <- getQueue queueQueue
+    let alreadyInQueue = maybe False (isJust . flip Seq.elemIndexL queue) maybeUserOrTeam
     streamer <- getQueue queueStreamer
-    case (open, indexed, maybeUserOrTeam) of
-        (False, _, _) -> msg "Sorry the queue is closed so you can't !enter. An admin must use !smash open to open the queue."
-        (_, False, _) -> msg $ printf "%s is not in the index. Add yourself with !index NNID MiiName." (getTwitchUser user)
-        (_, _, Nothing) -> msg $ printf "Couldn't add %s to queue. Try joining a team." (getTwitchUser user)
-        (_, _, Just userOrTeam) -> do
+    case (open, indexed, maybeUserOrTeam, alreadyInQueue) of
+        (False, _, _, _) -> msg "Sorry the queue is closed so you can't !enter. An admin must use !smash open to open the queue."
+        (_, False, _, _) -> msg $ printf "%s is not in the index. Add yourself with !index NNID MiiName." (getTwitchUser user)
+        (_, _, Nothing, _) -> msg $ printf "Couldn't add %s to queue. Try joining a team." (getTwitchUser user)
+        (_, _, Just userOrTeam, True) -> msg $ printf "Sorry %s, you can't join the queue more than once!"
+                (getUserOrTeam userOrTeam)
+        (_, _, Just userOrTeam, False) -> do
             withQueueQueue (Seq.|> userOrTeam)
             position <- getQueue (Seq.length . queueQueue)
             msg $ printf "%s, you've now been placed into the queue at position %d! Type !info to see your position and !friendme if you've yet to add %s."
