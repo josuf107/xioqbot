@@ -574,9 +574,9 @@ displayUserOrTeam userOrTeam = do
     friendMes <- fmap (Map.member userOrTeam) getFriendMesForMode
     miiNames <- getMiiNames userOrTeam
     return $ case (friendMes, miiNames) of
-        (True, []) -> printf "+%s" (getUserOrTeam userOrTeam)
+        (True, []) -> printf "%s+" (getUserOrTeam userOrTeam)
         (False, []) -> printf "%s" (getUserOrTeam userOrTeam)
-        (True, miis) -> printf "+%s (%s)" (getUserOrTeam userOrTeam) (listMiiNames miis)
+        (True, miis) -> printf "%s+ (%s)" (getUserOrTeam userOrTeam) (listMiiNames miis)
         (False, miis) -> printf "%s (%s)" (getUserOrTeam userOrTeam) (listMiiNames miis)
 
 getFriendMesForMode :: State Queue (Map.Map UserOrTeam [TwitchUser])
