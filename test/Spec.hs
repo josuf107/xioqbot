@@ -10,34 +10,34 @@ import System.Exit
 tests =
     [ test "Off" $ do
         streamer "!smash off"
-        botSay "qbot disabled. !smash on to re-enable"
+        botSay "/me has now been deactivated."
     , test "Off ignores commands" $ do
         streamer "!smash off"
         streamer "!info"
         botSayNothing
     , test "On" $ do
         streamer "!smash on"
-        botSay "qbot enabled. Hello everyone!"
+        botSay "/me is now active."
     , test "On turns on" $ do
         streamer "!smash off"
         streamer "!smash on"
-        botSay "qbot enabled. Hello everyone!"
+        botSay "/me is now active."
     , test "Mode singles" $ do
         streamer "!smash mode singles"
-        botSay "New mode is: Singles"
+        botSay "/me is now in Singles mode."
     , test "Mode doubles" $ do
         streamer "!smash mode doubles"
-        botSay "New mode is: Doubles"
+        botSay "/me is now in Doubles mode."
     , test "Mode crew" $ do
         streamer "!smash mode cb"
-        botSay "New mode is: Crew"
+        botSay "/me is now in A/B Crewbattle mode."
     , test "Allow" $ do
         streamer "!smash allow xio"
         botSay "Added admin: Xio"
     , test "Allow allows" $ do
         streamer "!smash allow xio"
         xio "!smash off"
-        botSay "qbot disabled. !smash on to re-enable"
+        botSay "/me has now been deactivated."
     , test "Deny" $ do
         streamer "!smash deny xio"
         botSay "Removed admin: Xio"
@@ -63,23 +63,23 @@ tests =
         botSay "Sorry the queue is closed so you can't !enter. An admin must use !smash open to open the queue."
     , test "New" $ do
         streamer "!smash new"
-        botSay "Created a new queue!"
+        botSay "A new list has been opened."
     , test "New clears queue" $ do
         streamer "!smash open"
         indexAndEnter "xio"
         streamer "!smash new"
         streamer "!list"
-        botSay "Queue is empty."
+        botSay "The queue is empty."
     , test "Open" $ do
         streamer "!smash open"
-        botSay "The queue is open! Type !enter to enter"
+        botSay "The queue has been opened and entries are being accepted."
     , test "Open opens the queue" $ do
         streamer "!smash open"
         indexAndEnter "xio"
         botSay "Xio, you've now been placed into the queue at position 1! Type !info to see your position and !friendme if you've yet to add Josuf107."
     , test "Close" $ do
         streamer "!smash close"
-        botSay "The queue is closed"
+        botSay "The queue has been closed and entries will not be accepted."
     , test "Close closes" $ do
         streamer "!smash open"
         streamer "!smash close"
@@ -137,7 +137,7 @@ tests =
         indexAndEnter "xio"
         streamer "!smash start"
         streamer "!win"
-        botSay "Josuf107 has just won a match against Xio! The score is 1:0 and it requires 2 to take the set"
+        botSay "Josuf107 has just won a match against Xio! The score is 1:0 and it requires 2 to take the set!"
     , test "Win (streamer takes set; two in queue)" $ do
         streamer "!smash open"
         indexAndEnter "xio"
@@ -154,7 +154,7 @@ tests =
         streamer "!win"
         streamer "!lose"
         streamer "!win"
-        botSay "Josuf107 has won the set against Xio! The score was 2:1."
+        botSay "Josuf107 has won the set against Xio! The score was 2:1!"
     , test "Win (doubles; streamer takes set; two in queue)" $ do
         streamer "!smash mode doubles"
         streamer "!smash open"
@@ -241,7 +241,22 @@ tests =
         xio "!teamcreate xfactor"
         xio "!teaminv zio"
         zio "!accept xfactor"
-        botSay "Zio has joined team xfactor!"
+        botSay "Zio has joined the team xfactor!"
+    , test "Index correct message" $ do
+        user "xio" "!index xionnid xiomii"
+        botSay "xio, your information has been updated."
+    , test "Singles Ruleset" $ do
+        user "xio" "!ruleset singles"
+        botSay "Singles Ruleset: 2 Stock, 6m Time, No Items, Legal Stages Only | Refer to !stagelist for legal stages."
+    , test "Doubles Ruleset" $ do
+        user "xio" "!ruleset doubles"
+        botSay "Doubles Ruleset: 3 Stock, 8m Time, No Items, Team Attack On, Legal Stages Only | Refer to !stagelist for legal stages."
+    , test "Stagelist" $ do
+        user "xio" "!stagelist"
+        botSay "Legal Stages: Battlefield, FD(Omega Palutena’s), Smashville, Town and City, Duck Hunt, and Lylat"
+    , test "Teamcreate msg" $ do
+        user "xio" "!teamcreate turtle"
+        botSay "xio has created the new team turtle, You can invite an ally with !teaminv [name] and cannot join the queue until you have a teammate."
     ]
 
 xio = user "xio"
