@@ -9,7 +9,8 @@ import System.IO
 import Text.Printf
 import Text.ParserCombinators.ReadP
 
-import Command hiding (spaceP, commandP)
+import Command hiding (spaceP, commandP, twitchUser)
+import qualified Command
 import Queue hiding (spaceP, commandP, Message)
 
 data Message
@@ -80,7 +81,7 @@ handleMessage conn msg q = do
     putStrLn msg
     case parseMessage msg of
         (Message (Just userString) "PRIVMSG" (_:params)) -> do
-            let user = TwitchUser userString
+            let user = Command.twitchUser userString
             let cmd = parseCommand user (reverse . drop 1 . reverse . unwords $ params)
             let (q', maybeReturnMessage) = handleTimestamped user time cmd q
             case maybeReturnMessage of

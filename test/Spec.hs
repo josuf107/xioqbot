@@ -14,42 +14,42 @@ tests =
     , test "Can't enter non-indexed user" $ do
         streamer "!smash open"
         user "a" "!enter"
-        botSay "a is not in the index. Add yourself with !index NNID MiiName."
+        botSay "A is not in the index. Add yourself with !index NNID MiiName."
     , test "Can enter indexed users into open queue" $ do
         streamer "!smash open"
         indexAndEnter "a"
-        botSay "a, you've now been placed into the queue at position 1! Type !info to see your position and !friendme if you've yet to add Xio.""
+        botSay "A, you've now been placed into the queue at position 1! Type !info to see your position and !friendme if you've yet to add Josuf107."
     , test "Non-enqueued info output formatted properly" $ do
         user "xio" "!index xionnid xiomii"
         user "xio" "!info"
-        botSay "| User: xio | NNID: xionnid | MiiName: xiomii | W:L 0:0 |"
+        botSay "| User: Xio | NNID: xionnid | MiiName: xiomii | W:L 0:0 |"
     , test "Enqueued info output formatted properly" $ do
         streamer "!smash open"
         user "xio" "!index xionnid xiomii"
         user "xio" "!enter"
         user "xio" "!info"
-        botSay "| User: xio | Position 1/1 in Queue | NNID: xionnid | MiiName: xiomii | W:L 0:0 |"
+        botSay "| User: Xio | Position 1/1 in Queue | NNID: xionnid | MiiName: xiomii | W:L 0:0 |"
     , test "Absent !info output formatted properly" $ do
         user "xio" "!info"
-        botSay "xio is not in the index. Add yourself with !index NNID MiiName."
+        botSay "Xio is not in the index. Add yourself with !index NNID MiiName."
     , test "Known !nnid formatted properly" $ do
         user "xio" "!index xionnid xiomii"
         user "xio" "!nnid"
-        botSay "xio's NNID is xionnid."
+        botSay "Xio's NNID is xionnid."
     , test "Unknown !nnid formatted properly" $ do
         user "xio" "!nnid"
-        botSay "xio is not in the index. Try !index NNID MiiName."
+        botSay "Xio is not in the index. Try !index NNID MiiName."
     , test "Start Singles (one in queue)" $ do
         streamer "!smash open"
         indexAndEnter "xio"
         streamer "!smash start"
-        botSay "The first match is beginning and the opponent is xio (xiomiiname)!"
+        botSay "The first match is beginning and the opponent is Xio (xiomiiname)!"
     , test "Start Singles (two in queue)" $ do
         streamer "!smash open"
         indexAndEnter "xio"
         indexAndEnter "zio"
         streamer "!smash start"
-        botSay "The first match is beginning and the opponent is xio (xiomiiname)! Next up is zio (ziomiiname)!"
+        botSay "The first match is beginning and the opponent is Xio (xiomiiname)! Next up is Zio (ziomiiname)!"
     , test "Start Singles (empty queue)" $ do
         streamer "!smash open"
         streamer "!smash start"
@@ -94,14 +94,14 @@ tests =
         streamer "!win"
         streamer "!lose"
         streamer "!win"
-        botSay "josuf107 has won the set against xio! The score was 2:1. Next up is zio (ziomiiname)!"
+        botSay "Josuf107 has won the set against Xio! The score was 2:1. Next up is Zio (ziomiiname)!"
     , test "Skip formatted properly (two in queue)" $ do
         streamer "!smash open"
         indexAndEnter "xio"
         indexAndEnter "zio"
         streamer "!smash start"
         streamer "!smash skip"
-        botSay "Skipped xio. Next up is zio (ziomiiname)!"
+        botSay "Skipped Xio. Next up is Zio (ziomiiname)!"
     ]
 
 index u = do
@@ -122,7 +122,7 @@ wait = tellOne . Wait
 streamer :: String -> TestSpec
 streamer = tellOne . StreamerSay
 user :: String -> String -> TestSpec
-user u = tellOne . UserSay (TwitchUser u)
+user u = tellOne . UserSay (twitchUser u)
 botSay :: String -> TestSpec
 botSay = tellOne . BotSay . Just
 botSayNothing :: TestSpec

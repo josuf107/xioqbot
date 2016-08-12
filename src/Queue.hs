@@ -24,7 +24,7 @@ test = go defaultQueue
             input <- getLine
             let overrideUser = take 1 input /= "!"
             let maybeUser = head . words $ input
-            let user = TwitchUser $ if overrideUser then maybeUser else "josuf107"
+            let user = twitchUser $ if overrideUser then maybeUser else "josuf107"
             let cmdString = unwords . (if overrideUser then drop 1 else id) . words $ input
             let cmd = parseCommand user cmdString
             let (q', maybeReturnMessage) = handleMaybeDisabled user cmd q
@@ -69,12 +69,12 @@ defaultQueue = Queue
     { queueOn = True
     , queueLastMessage = UTCTime (fromGregorian 2016 1 1) 0
     , queueMode = Singles
-    , queueAdmins = Set.fromList [TwitchUser "josuf107"]
+    , queueAdmins = Set.fromList [twitchUser "josuf107"]
     , queueRestricted = Set.empty
     , queueQueue = Seq.empty
     , queueOpen = False
     , queueTeams = Map.empty
-    , queueStreamer = TwitchUser "josuf107"
+    , queueStreamer = twitchUser "josuf107"
     , queueSetWins = 0
     , queueSetLosses = 0
     , queueCrewStockA = 3
@@ -353,16 +353,18 @@ handleCommand (Enter user) = do
     open <- getQueue queueOpen
     indexed <- getQueue (Map.member user . queueIndex)
     maybeUserOrTeam <- userOrTeamBasedOnMode user
+    streamer <- getQueue queueStreamer
     case (open, indexed, maybeUserOrTeam) of
-        (False, _, _) -> msg "Sorry the queue is closed so you can't !enter. Use !smash open to open the queue."
+        (False, _, _) -> msg "Sorry the queue is closed so you can't !enter. An admin must use !smash open to open the queue."
         (_, False, _) -> msg $ printf "%s is not in the index. Add yourself with !index NNID MiiName." (getTwitchUser user)
         (_, _, Nothing) -> msg $ printf "Couldn't add %s to queue. Try joining a team." (getTwitchUser user)
         (_, _, Just userOrTeam) -> do
             withQueueQueue (Seq.|> userOrTeam)
             position <- getQueue (Seq.length . queueQueue)
-            msg $ printf "Added %s to the queue! You are at position %d!"
+            msg $ printf "%s, you've now been placed into the queue at position %d! Type !info to see your position and !friendme if you've yet to add %s."
                 (getUserOrTeam userOrTeam)
-                        position
+                position
+                (getTwitchUser streamer)
 handleCommand (Here user) = do
     time <- getQueue queueLastMessage
     withQueueHereMap (Map.insert user time)
@@ -496,8 +498,8 @@ endMatch winner loser = do
     mode <- getQueue queueMode
     case mode of
         Singles -> do
-            let winnerUser = TwitchUser . getUserOrTeam $ winner
-            let loserUser = TwitchUser . getUserOrTeam $ loser
+            let winnerUser = twitchUser . getUserOrTeam $ winner
+            let loserUser = twitchUser . getUserOrTeam $ loser
             winnerInfo <- getQueue (Map.lookup winnerUser . queueIndex)
             case winnerInfo of
                 Nothing -> return ()
@@ -589,7 +591,7 @@ getMiiNames userOrTeam = do
     mode <- getQueue queueMode
     case mode of
         Singles -> do
-            let user = TwitchUser . getUserOrTeam $ userOrTeam
+            let user = twitchUser . getUserOrTeam $ userOrTeam
             lookupMii user
         Doubles -> do
             let team = TeamName . getUserOrTeam $ userOrTeam
