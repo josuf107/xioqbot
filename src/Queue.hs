@@ -571,9 +571,13 @@ getRequiredWins = do
 
 displayUserOrTeam :: UserOrTeam -> State Queue String
 displayUserOrTeam userOrTeam = do
-    friendMes <- fmap (fromMaybe [] . Map.lookup userOrTeam) getFriendMesForMode
+    friendMes <- fmap (Map.member userOrTeam) getFriendMesForMode
     miiNames <- getMiiNames userOrTeam
-    return $ userOrTeamAndMiis userOrTeam miiNames
+    return $ case (friendMes, miiNames) of
+        (True, []) -> printf "+%s" (getUserOrTeam userOrTeam)
+        (False, []) -> printf "%s" (getUserOrTeam userOrTeam)
+        (True, miis) -> printf "+%s (%s)" (getUserOrTeam userOrTeam) (listMiiNames miis)
+        (False, miis) -> printf "%s (%s)" (getUserOrTeam userOrTeam) (listMiiNames miis)
 
 getFriendMesForMode :: State Queue (Map.Map UserOrTeam [TwitchUser])
 getFriendMesForMode = do
@@ -609,12 +613,6 @@ getMiiNames userOrTeam = do
 
 listMiiNames :: [MiiName] -> String
 listMiiNames = intercalate " & " . fmap getMiiName
-
-userOrTeamAndMiis :: UserOrTeam -> [MiiName] -> String
-userOrTeamAndMiis userOrTeam [] = printf "%s" (getUserOrTeam userOrTeam)
-userOrTeamAndMiis userOrTeam miis = printf "%s (%s)"
-    (getUserOrTeam userOrTeam)
-    (listMiiNames miis)
 
 userOrTeamBasedOnMode :: TwitchUser -> State Queue (Maybe UserOrTeam)
 userOrTeamBasedOnMode user = get >>= \q -> case queueMode q of
