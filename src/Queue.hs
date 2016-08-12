@@ -276,7 +276,9 @@ handleCommand (FriendList maybeLimit) = do
     let limit = fromMaybe 10 maybeLimit
     friendMes <- fmap Map.keysSet getFriendMesForMode
     friendMeQueue <- getQueue (Seq.take limit . Seq.filter (\f -> Set.member f friendMes) . queueQueue)
-    msg $ printf "Next %d friendmes in the queue: %s" limit (printQueue friendMeQueue)
+    friendMeMiis <- mapM getMiiNames friendMeQueue
+    let friendMeQueueMiis = Seq.zip friendMeQueue friendMeMiis
+    msg $ printf "Next %d friendmes in the queue: %s" limit (printQueue friendMeQueueMiis)
 handleCommand (FriendClear maybeLimit) = do
     let limit = fromMaybe 10 maybeLimit
     friendMes <- getFriendMesForMode
@@ -304,10 +306,12 @@ handleCommand (List maybeLimit) = do
         Nothing -> msg "Queue is empty."
         Just current -> do
             queue <- getQueue (Seq.drop 1 . Seq.take limit . queueQueue)
+            miiNames <- mapM getMiiNames queue
+            let queueMiis = Seq.zip queue miiNames
             let msgStart = printf "Currently playing %s." (getUserOrTeam current)
             msg $ case Seq.null queue of
                 True -> msgStart ++ " No other entries in the queue."
-                False -> msgStart ++ printf " Next in queue: %s" (printQueue queue)
+                False -> msgStart ++ printf " Next in queue: %s" (printQueue queueMiis)
 handleCommand (RuleSet maybeMode) = do
     currentMode <- getQueue queueMode
     let mode = fromMaybe currentMode maybeMode
@@ -487,8 +491,10 @@ removeFromQueue userOrTeam = do
 getQueue :: (Queue -> a) -> State Queue a
 getQueue f = fmap f get
 
-printQueue :: Seq.Seq UserOrTeam -> String
-printQueue = foldr (\entry result -> result ++ getUserOrTeam entry ++ " ") ""
+printQueue :: Seq.Seq (UserOrTeam, [MiiName]) -> String
+printQueue = intercalate ", "
+    . fold
+    . fmap (return . uncurry userOrTeamAndMiis)
 
 insert :: Int -> a -> Seq.Seq a -> Seq.Seq a
 insert i a s = (\(l, r) -> l Seq.>< (a Seq.<| r)) $ Seq.splitAt i s
