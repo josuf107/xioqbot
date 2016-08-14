@@ -81,8 +81,8 @@ defaultQueue = Queue
     , queueCrewStockB = 3
     , queueFriendMes = Set.empty
     , queueIndex = Map.empty
-    , queueRulesSingles = "It's singles."
-    , queueRulesDoubles = "It's doubles."
+    , queueRulesSingles = "2 Stock, 6m Time, No Items, Legal Stages Only | Refer to !stagelist for legal stages."
+    , queueRulesDoubles = "3 Stock, 8m Time, No Items, Team Attack On, Legal Stages Only | Refer to !stagelist for legal stages."
     , queueRulesCrew = "It's a crew battle."
     , queueHereMap = Map.empty
     , queueInvites = Map.empty
@@ -312,7 +312,7 @@ handleCommand (RuleSet maybeMode) = do
         Doubles -> getQueue queueRulesDoubles
         Crew -> getQueue queueRulesCrew
         InvalidMode garbageMode -> return $ garbageMode ++ " is not a valid mode. Choose singles, doubles, or cb."
-    msg $ printf "Rules for %s: %s"
+    msg $ printf "%s Ruleset: %s"
         (show mode)
         ruleset
 handleCommand (Leave user) = do
