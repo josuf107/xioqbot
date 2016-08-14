@@ -51,6 +51,7 @@ data Queue
     , queueRulesSingles :: String
     , queueRulesDoubles :: String
     , queueRulesCrew :: String
+    , queueStagelist :: String
     , queueHereMap :: Map.Map TwitchUser UTCTime
     , queueInvites :: Map.Map TwitchUser (Set.Set TeamName)
     , queueDenyReply :: String
@@ -84,6 +85,7 @@ defaultQueue = Queue
     , queueRulesSingles = "2 Stock, 6m Time, No Items, Legal Stages Only | Refer to !stagelist for legal stages."
     , queueRulesDoubles = "3 Stock, 8m Time, No Items, Team Attack On, Legal Stages Only | Refer to !stagelist for legal stages."
     , queueRulesCrew = "It's a crew battle."
+    , queueStagelist = "Battlefield, FD(Omega Palutena’s), Smashville, Town and City, Duck Hunt, Dreamland, and Lylat."
     , queueHereMap = Map.empty
     , queueInvites = Map.empty
     , queueDenyReply = "You can't do that"
@@ -133,6 +135,8 @@ setQueueRulesDoubles :: QueueSet String
 setQueueRulesDoubles v = modify $ \q -> q { queueRulesDoubles = v }
 setQueueRulesCrew :: QueueSet String
 setQueueRulesCrew v = modify $ \q -> q { queueRulesCrew = v }
+setQueueStagelist :: QueueSet String
+setQueueStagelist v = modify $ \q -> q { queueStagelist = v }
 withQueueHereMap :: QueueModify (Map.Map TwitchUser UTCTime)
 withQueueHereMap f = modify $ \q -> q { queueHereMap = f (queueHereMap q) }
 withQueueInvites :: QueueModify (Map.Map TwitchUser (Set.Set TeamName))
@@ -315,6 +319,9 @@ handleCommand (RuleSet maybeMode) = do
     msg $ printf "%s Ruleset: %s"
         (show mode)
         ruleset
+handleCommand Stagelist = do
+    stagelist <- getQueue queueStagelist
+    msg $ printf "Legal Stages: %s" stagelist
 handleCommand (Leave user) = do
     userOrTeam <- userOrTeamBasedOnMode user
     case userOrTeam of

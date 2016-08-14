@@ -50,6 +50,7 @@ data Command
     | Friend TwitchUser
     | List (Maybe Int)
     | RuleSet (Maybe Mode)
+    | Stagelist
     | Leave TwitchUser
     | Remove UserOrTeam
     | Info TwitchUser
@@ -126,6 +127,8 @@ commands =
         "Display the current queue list with the given limit (default 10)"
     , cmd "ruleset" (RuleSet <$> maybeP modeP)
         "Display the ruleset for the given mode (default current mode)"
+    , cmd "stagelist" (return Stagelist)
+        "Display the stage list"
     , userCmd "leave" (return . Leave)
         "Remove yourself from the queue"
     , restrictedCmd "remove" (Remove <$> userOrTeamP)
