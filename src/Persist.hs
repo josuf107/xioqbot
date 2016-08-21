@@ -3,13 +3,18 @@ module Persist where
 import Command
 import Queue hiding (getQueue)
 
+import Control.Monad.State (execState)
 import qualified Data.Map as Map
+import qualified Data.Set as Set
+import qualified Data.Sequence as Seq
 import Data.List
+import Data.Monoid
 import Data.Serialize
 import Data.Time
 import Data.Time.Clock.POSIX
+import Data.Word
 import qualified Data.ByteString as BS
-import GHC.Generics
+import GHC.Real
 import System.Directory
 
 snapshotQueue :: Queue -> IO ()
@@ -30,7 +35,20 @@ encodeQueue = encode . SerialQueue
 decodeQueue :: BS.ByteString -> Either String Queue
 decodeQueue = fmap getSerialQueue . decode
 
-newtype SerialQueue = SerialQueue { getSerialQueue :: Queue } deriving (Show, Eq, Ord)
+newtype Serial a = Serial { getSerial :: a } deriving (Show, Eq, Ord)
+
+class Serialize' a where
+    put' :: Putter a
+    get' :: Get a
+
+instance Serialize' a => Serialize (Serial a) where
+    put = put' . getSerial
+    get = fmap Serial get'
+
+newtype SerialQueue
+    = SerialQueue
+    { getSerialQueue :: Queue
+    } deriving (Show, Eq, Ord)
 
 instance Serialize SerialQueue where
     put (SerialQueue q) = putQueue q
@@ -38,14 +56,134 @@ instance Serialize SerialQueue where
 
 putQueue :: Queue -> Put
 putQueue q = do
+    let putq f = put (f q)
+    putq queueOn
+    putq (Serial . queueLastMessage)
+    putq (Serial . queueMode)
+    putq (Set.map Serial . queueAdmins)
+    putq (queueRestricted)
+    putq (fmap Serial . queueQueue)
+    putq queueOpen
+    putq (Map.mapKeys getTwitchUser . fmap getTeamName . queueTeams)
+    putq (getTwitchUser . queueStreamer)
+    mapM_ putq [queueSetWins, queueSetLosses, queueCrewStockA, queueCrewStockB]
+    putq (Set.map getTwitchUser . queueFriendMes)
     put (genericizeIndex . queueIndex $ q)
+    putq queueRulesSingles
+    putq queueRulesDoubles
+    putq (Map.mapKeys Serial . fmap Serial . queueHereMap)
+    putq (Map.mapKeys Serial . fmap (Set.map Serial) . queueInvites)
+    putq queueDenyReply
+    putq queueWinBuffer
+    putq queueListBuffer
+    putq queueSinglesLimit
+    putq queueDoublesLimit
+    putq queueReenterWait
+    putq queueHereAlert
+    putq queueSinglesBestOf
+    putq queueDoublesBestOf
+
+getSet :: Serialize a => QueueSet a -> Get (Endo Queue)
+getSet f = fmap (Endo . execState . f) get
+
+getModify :: Serialize a => QueueModify a -> Get (Endo Queue)
+getModify m = getSet (m . const)
+
+getModifyF :: Serialize a => (a -> b) -> QueueModify b -> Get (Endo Queue)
+getModifyF f m = getSet (m . const . f)
+
+getSet' :: Serialize' a => QueueSet a -> Get (Endo Queue)
+getSet' f = fmap (Endo . execState . f . getSerial) get
+
+getModify' :: Serialize' a => QueueModify a -> Get (Endo Queue)
+getModify' m = getSet' (m . const)
 
 getQueue :: Get Queue
 getQueue = do
-    index <- fmap ungenericizeIndex get
-    return $ defaultQueue
-        { queueIndex = index
-        }
+    parts <- sequence
+        [ getSet setQueueOn
+        , getSet' setQueueLastMessage
+        , getSet' setQueueMode
+        , getModify' withQueueAdmins
+        , getModify withQueueRestricted
+        , getModify' withQueueQueue
+        , getSet setQueueOpen
+        , getModify' withQueueTeams
+        , getSet' setQueueStreamer
+        , getModify withQueueSetWins
+        , getModify withQueueSetLosses
+        , getSet setQueueCrewStockA
+        , getSet setQueueCrewStockB
+        , getModify' withQueueFriendMes
+        , getModifyF ungenericizeIndex withQueueIndex
+        , getSet setQueueRulesSingles
+        , getSet setQueueRulesDoubles
+        , getModify' withQueueHereMap
+        , getModify' withQueueInvites
+        , getSet setQueueDenyReply
+        , getSet setQueueWinBuffer
+        , getSet setQueueListBuffer
+        , getSet setQueueSinglesLimit
+        , getSet setQueueDoublesLimit
+        , getSet setQueueReenterWait
+        , getSet setQueueHereAlert
+        , getSet setQueueSinglesBestOf
+        , getSet setQueueDoublesBestOf
+        ]
+    return $ appEndo (mconcat parts) defaultQueue
+
+instance Serialize' TwitchUser where
+    put' = put . getTwitchUser
+    get' = fmap TwitchUser get
+instance Serialize' TeamName where
+    put' = put . getTeamName
+    get' = fmap TeamName get
+instance Serialize' UserOrTeam where
+    put' = put . getUserOrTeam
+    get' = fmap UserOrTeam get
+instance Serialize' NNID where
+    put' = put . getNNID
+    get' = fmap NNID get
+instance Serialize' MiiName where
+    put' = put . getMiiName
+    get' = fmap MiiName get
+instance Serialize' Mode where
+    put' mode = case mode of
+        Singles -> putWord8 0
+        Doubles -> putWord8 1
+        Crew -> putWord8 2
+        InvalidMode invalidString -> putWord8 3 >> put invalidString
+    get' = getWord8 >>= \w -> case w of
+        0 -> return Singles
+        1 -> return Doubles
+        2 -> return Crew
+        3 -> fmap InvalidMode get
+        x -> return $ InvalidMode ("No parse: " ++ show x)
+instance Serialize' CrewSide where
+    put' crew = case crew of
+        A -> putWord8 0
+        B -> putWord8 1
+    get' = getWord8 >>= \w -> return $ case w of
+        0 -> A
+        1 -> B
+        x -> error $ "Couldn't parse " ++ show x
+instance Serialize' UTCTime where
+    put' (UTCTime (ModifiedJulianDay d) t) = do
+        put d
+        put (toRational t)
+    get' = do
+        d <- fmap ModifiedJulianDay get
+        t <- fmap fromRational get
+        return $ UTCTime d t
+instance (Ord a, Serialize' a) => Serialize' (Set.Set a) where
+    put' = put . Set.map Serial
+    get' = fmap (Set.map getSerial) get
+instance Serialize' a => Serialize' (Seq.Seq a) where
+    put' = put . fmap Serial
+    get' = fmap (fmap getSerial) get
+instance (Ord k, Serialize' k, Serialize' v) => Serialize' (Map.Map k v) where
+    put' = put . Map.mapKeys Serial . fmap Serial
+    get' = fmap (Map.mapKeys getSerial . fmap getSerial) get
 
 genericizeIndex
     :: Map.Map TwitchUser (NNID, MiiName, Int, Int)
@@ -60,4 +198,3 @@ ungenericizeIndex
 ungenericizeIndex
     = Map.mapKeys TwitchUser
     . fmap (\(nnid, mii, w, l) -> (NNID nnid, MiiName mii, w, l))
-

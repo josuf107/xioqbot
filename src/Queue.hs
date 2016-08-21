@@ -105,6 +105,8 @@ type QueueSet a = a -> State Queue ()
 
 setQueueOn :: QueueSet Bool
 setQueueOn v = modify $ \q -> q { queueOn = v }
+setQueueLastMessage :: QueueSet UTCTime
+setQueueLastMessage v = modify $ \q -> q { queueLastMessage = v }
 setQueueMode :: QueueSet Mode
 setQueueMode v = modify $ \q -> q { queueMode = v }
 withQueueAdmins :: QueueModify (Set.Set TwitchUser)
