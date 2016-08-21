@@ -7,7 +7,7 @@ import Data.Char
 data Mode = Singles | Doubles | Crew | InvalidMode String deriving (Show, Eq, Ord)
 newtype NNID = NNID { getNNID :: String } deriving (Show, Eq, Ord)
 newtype MiiName = MiiName { getMiiName :: String } deriving (Show, Eq, Ord)
-newtype TwitchUser = TwitchUser { getTwitchUser :: String } deriving (Show, Eq, Ord)
+newtype TwitchUser = TwitchUser { getTwitchUser :: String } deriving (Show, Read, Eq, Ord)
 newtype TeamName = TeamName { getTeamName :: String } deriving (Show, Eq, Ord)
 newtype UserOrTeam = UserOrTeam { getUserOrTeam :: String } deriving (Show, Eq, Ord)
 data CrewSide = A | B deriving (Show, Eq, Ord)

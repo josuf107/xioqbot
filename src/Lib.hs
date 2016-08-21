@@ -56,13 +56,18 @@ twitchPort = 6667
 connectTwitch :: IO Handle
 connectTwitch = connectTo twitchServer (PortNumber twitchPort)
 
+loadAndUpdateQueue :: IO Queue
+loadAndUpdateQueue = do
+    maybeQueueAndLogs <- loadMostRecentQueueAndLogs
+    (queueStart, logs) <- case maybeQueueAndLogs of
+        Left errorMessage -> putStrLn errorMessage >> return (defaultQueue, [])
+        Right (q, logs) -> return (q, logs)
+    return $ foldr (\(time, user, msg) -> fst . handleTimestamped user time (parseCommand user msg)) queueStart logs
+
 talk :: String -> String -> String -> IO ()
 talk twitchUser twitchToken twitchChannel = do
     putStrLn "Loading saved queue file"
-    maybeQueue <- loadMostRecentQueue
-    queue <- case maybeQueue of
-        Left errorMessage -> putStrLn errorMessage >> return defaultQueue
-        Right q -> return q
+    queue <- loadAndUpdateQueue
     conn <- connectTwitch
     hSetBuffering conn NoBuffering
     write conn "PASS" twitchToken
@@ -84,10 +89,11 @@ handleMessage twitchChannel conn msg q = do
     putStrLn msg
     case parseMessage msg of
         (Message (Just userString) "PRIVMSG" (_:params)) -> do
+            let messageText = reverse . drop 1 . reverse . unwords $ params
             let user = Command.twitchUser userString
-            let cmd = parseCommand user (reverse . drop 1 . reverse . unwords $ params)
+            logMessage q time user messageText
+            let cmd = parseCommand user messageText
             let (q', maybeReturnMessage) = handleTimestamped user time cmd q
-            when (queueIndex q /= queueIndex q') (snapshotQueue q')
             case maybeReturnMessage of
                 Just returnMessage -> write conn "PRIVMSG" (twitchChannel ++ " :" ++ returnMessage)
                 Nothing -> return ()

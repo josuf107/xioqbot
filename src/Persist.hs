@@ -4,23 +4,69 @@ import Command
 import Queue hiding (getQueue)
 
 import Control.Monad.State (execState)
-import qualified Data.Map as Map
-import qualified Data.Set as Set
-import qualified Data.Sequence as Seq
 import Data.List
 import Data.Monoid
 import Data.Serialize
 import Data.Time
 import Data.Time.Clock.POSIX
 import Data.Word
-import qualified Data.ByteString as BS
 import GHC.Real
 import System.Directory
+import System.IO hiding (hGetContents)
+import System.IO.Strict (hGetContents)
+import qualified Data.ByteString as BS
+import qualified Data.Map as Map
+import qualified Data.Sequence as Seq
+import qualified Data.Set as Set
 
-snapshotQueue :: Queue -> IO ()
-snapshotQueue q = do
-    millisFileName <- fmap (show . floor . (*1000) . utcTimeToPOSIXSeconds) getCurrentTime
-    BS.writeFile ("data/" ++ millisFileName) (encodeQueue q)
+type LogMessage = (UTCTime, TwitchUser, String)
+
+getMillisFileName :: IO String
+getMillisFileName = fmap
+    (show . floor . (*1000) . utcTimeToPOSIXSeconds)
+    getCurrentTime
+
+logMessage :: Queue -> UTCTime -> TwitchUser -> String -> IO ()
+logMessage q time user messageText = do
+    maybeLogFile <- mostRecentLogFile
+    (logFile, logs) <- case maybeLogFile of
+        Nothing -> do
+            newFileName <- getMillisFileName
+            snapshotQueue newFileName q
+            return (newFileName, [])
+        (Just logFile) -> do
+            logs <- loadLogs logFile
+            return (logFile, logs)
+    currentLogFile <- case length logs >= 100 of
+        True -> do
+            newFileName <- getMillisFileName
+            snapshotQueue newFileName q
+            return newFileName
+        False -> return logFile
+    writeLog currentLogFile time user messageText
+
+mostRecentLogFile :: IO (Maybe FilePath)
+mostRecentLogFile = do
+    logFiles <- fmap (filter (`notElem` [".", ".."])) (getDirectoryContents "logs")
+    return $ case reverse (sort logFiles) of
+        (logFile:_) -> Just logFile
+        [] -> Nothing
+
+loadLogs :: FilePath -> IO [LogMessage]
+loadLogs logFile = do
+    logHandle <- openFile ("logs/" ++ logFile) ReadMode
+    messages <- fmap (fmap read . lines) . hGetContents $ logHandle
+    return messages
+
+writeLog :: FilePath -> UTCTime -> TwitchUser -> String -> IO ()
+writeLog fp time user messageText = do
+    logHandle <- openFile ("logs/" ++ fp) AppendMode
+    hPutStrLn logHandle (show (time, user, messageText))
+    hClose logHandle
+
+snapshotQueue :: FilePath -> Queue -> IO ()
+snapshotQueue fp q = do
+    BS.writeFile ("data/" ++ fp) (encodeQueue q)
 
 loadMostRecentQueue :: IO (Either String Queue)
 loadMostRecentQueue = do
@@ -28,6 +74,17 @@ loadMostRecentQueue = do
     case reverse (sort queueFiles) of
         (queueFile:_) -> fmap decodeQueue (BS.readFile $ "data/" ++ queueFile)
         [] -> return $ Left "No snapshots"
+
+loadMostRecentQueueAndLogs :: IO (Either String (Queue, [LogMessage]))
+loadMostRecentQueueAndLogs = do
+    mostRecentQueue <- loadMostRecentQueue
+    recentLogFile <- mostRecentLogFile
+    case (mostRecentQueue, recentLogFile) of
+        (Right q, Just logFile) -> do
+            recentLogs <- loadLogs logFile
+            return (Right (q, recentLogs))
+        (Left queueError, _) -> return (Left queueError)
+        (_, Nothing) -> return (Left "No log files")
 
 encodeQueue :: Queue -> BS.ByteString
 encodeQueue = encode . SerialQueue

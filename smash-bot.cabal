@@ -27,6 +27,7 @@ library
                         , containers
                         , cereal
                         , directory
+                        , strict
   ghc-options:         -fwarn-incomplete-patterns
   default-language:    Haskell2010
 
