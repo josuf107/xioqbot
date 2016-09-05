@@ -110,7 +110,7 @@ tests =
         user "zio" "!accept xioteam"
         user "xio" "!enter"
         streamer "!smash start"
-        botSay "The first match is beginning and the opponent is xioteam (xiomiiname & ziomiiname)!"
+        botSay "The first match is beginning and the opponent is Xioteam (xiomiiname & ziomiiname)!"
     , test "Start (doubles; two in queue)" $ do
         streamer "!smash mode doubles"
         streamer "!smash open"
@@ -127,7 +127,7 @@ tests =
         user "bar" "!accept footeam"
         user "foo" "!enter"
         streamer "!smash start"
-        botSay "The first match is beginning and the opponent is xioteam (xiomiiname & ziomiiname)! Next up is footeam (barmiiname & foomiiname)!"
+        botSay "The first match is beginning and the opponent is Xioteam (xiomiiname & ziomiiname)! Next up is Footeam (barmiiname & foomiiname)!"
     , test "Start (doubles; empty queue)" $ do
         streamer "!smash open"
         streamer "!smash start"
@@ -178,7 +178,7 @@ tests =
         streamer "!win"
         streamer "!lose"
         streamer "!win"
-        botSay "steamrollers has won the set against xioteam! The score was 2:1. Next up is a-team (amiiname & bmiiname)!"
+        botSay "Steamrollers has won the set against Xioteam! The score was 2:1. Next up is A-team (amiiname & bmiiname)!"
     , test "Skip (two in queue)" $ do
         streamer "!smash open"
         indexAndEnter "xio"
@@ -203,7 +203,14 @@ tests =
         user "a" "!enter"
         streamer "!smash start"
         streamer "!smash skip"
-        botSay "Skipped xfactor. Next up is a-team (amiiname & bmiiname)!"
+        botSay "Skipped Xfactor. Next up is A-team (amiiname & bmiiname)!"
+    , test "Move" $ do
+        streamer "!smash open"
+        indexAndEnter "xio"
+        indexAndEnter "zio"
+        streamer "!smash move zio 0"
+        streamer "!list"
+        botSay "Currently playing Zio. Next in queue: Xio (xiomiiname)"
     , test "Can't enter closed queue" $ do
         user "a" "!enter"
         botSay "Sorry the queue is closed so you can't !enter. An admin must use !smash open to open the queue."
@@ -241,7 +248,7 @@ tests =
         xio "!teamcreate xfactor"
         xio "!teaminv zio"
         zio "!accept xfactor"
-        botSay "Zio has joined team xfactor!"
+        botSay "Zio has joined team Xfactor!"
     ]
 
 xio = user "xio"

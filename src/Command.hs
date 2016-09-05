@@ -193,7 +193,10 @@ commandP user = do
     eof
     return (commandSpec, result)
 
-twitchUser u = TwitchUser $ (fmap toUpper . take 1 $ u) ++ (drop 1 u)
+asUpperCase f i = f $ (fmap toUpper . take 1 $ i) ++ (drop 1 i)
+twitchUser = asUpperCase TwitchUser
+teamName = asUpperCase TeamName
+userOrTeam = asUpperCase UserOrTeam
 modeP = spaceP >> choice
     [ mapStringP "singles" Singles
     , mapStringP "doubles" Doubles
@@ -204,8 +207,8 @@ mapStringP s r = string s >> return r
 userP = typedIdentifierP twitchUser
 nnidP = typedIdentifierP NNID
 miiP = fmap MiiName remainderP
-userOrTeamP = typedIdentifierP UserOrTeam
-teamP = typedIdentifierP TeamName
+userOrTeamP = typedIdentifierP userOrTeam
+teamP = typedIdentifierP teamName
 typedIdentifierP t = spaceP >> (fmap t $ many1 (satisfy (/=' ')))
 spaceP = many1 (char ' ')
 intP = do
