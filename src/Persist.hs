@@ -5,6 +5,7 @@ import Queue hiding (getQueue)
 
 import Control.Monad.State (execState)
 import Data.List
+import Data.Maybe
 import Data.Monoid
 import Data.Serialize
 import Data.Time
@@ -48,9 +49,7 @@ logMessage q time user messageText = do
 mostRecentLogFile :: IO (Maybe FilePath)
 mostRecentLogFile = do
     logFiles <- fmap (filter (`notElem` [".", ".."])) (getDirectoryContents "logs")
-    return $ case reverse (sort logFiles) of
-        (logFile:_) -> Just logFile
-        [] -> Nothing
+    return . listToMaybe . reverse . sort $ logFiles
 
 loadLogs :: FilePath -> IO [LogMessage]
 loadLogs logFile = do
@@ -70,10 +69,15 @@ snapshotQueue fp q = do
 
 loadMostRecentQueue :: IO (Either String Queue)
 loadMostRecentQueue = do
+    queueFile <- mostRecentQueueFile
+    case queueFile of
+        (Just queueFile) -> fmap decodeQueue (BS.readFile queueFile)
+        Nothing -> return $ Left "No snapshots"
+
+mostRecentQueueFile :: IO (Maybe FilePath)
+mostRecentQueueFile = do
     queueFiles <- fmap (filter (`notElem` [".", ".."])) (getDirectoryContents "data")
-    case reverse (sort queueFiles) of
-        (queueFile:_) -> fmap decodeQueue (BS.readFile $ "data/" ++ queueFile)
-        [] -> return $ Left "No snapshots"
+    return . fmap ("data/"++) . listToMaybe . reverse . sort $ queueFiles
 
 loadMostRecentQueueAndLogs :: IO (Either String (Queue, [LogMessage]))
 loadMostRecentQueueAndLogs = do
