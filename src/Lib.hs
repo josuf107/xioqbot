@@ -1,6 +1,9 @@
 module Lib where
 
 import Control.Concurrent
+import Control.Concurrent.STM.TVar
+import Control.Concurrent.STM
+import Control.Exception
 import Control.Monad
 import Data.Char
 import Data.Time
@@ -13,6 +16,7 @@ import Command hiding (spaceP, commandP, twitchUser)
 import qualified Command
 import Queue hiding (spaceP, commandP, Message)
 import Persist
+import qualified Display
 
 data Message
     = Message
@@ -75,13 +79,20 @@ talk twitchUser twitchToken twitchChannel = do
     write conn "JOIN" twitchChannel
     replicateM_ 10 $ hGetLine conn >>= putStrLn
     write conn "PRIVMSG" (twitchChannel ++ " :Hi everybody")
-    handleMessages twitchChannel conn queue
+    statusLine <- atomically (newTVar "")
+    displayThread <- forkIO (Display.display statusLine)
+    result <- try (handleMessages statusLine twitchChannel conn queue)
+    case result of
+        Left e -> killThread displayThread >> throw (e :: SomeException)
+        Right _ -> return ()
+    killThread displayThread
 
-handleMessages :: String -> Handle -> Queue -> IO ()
-handleMessages twitchChannel conn q = do
+handleMessages :: (TVar String) -> String -> Handle -> Queue -> IO ()
+handleMessages statusLine twitchChannel conn q = do
+    atomically (writeTVar statusLine (getQueueStatus q))
     nextLine <- hGetLine conn
     q' <- handleMessage twitchChannel conn nextLine q
-    handleMessages twitchChannel conn q'
+    handleMessages statusLine twitchChannel conn q'
 
 handleMessage :: String -> Handle -> String -> Queue -> IO Queue
 handleMessage twitchChannel conn msg q = do

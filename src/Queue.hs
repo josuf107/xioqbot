@@ -658,3 +658,13 @@ userOrTeamBasedOnMode :: TwitchUser -> State Queue (Maybe UserOrTeam)
 userOrTeamBasedOnMode user = get >>= \q -> case queueMode q of
     Doubles -> return $ fmap generalizeTeam $ Map.lookup user (queueTeams q)
     _ -> return $ Just (generalizeUser user)
+
+getQueueStatus :: Queue -> String
+getQueueStatus = evalState (do
+    current <- getCurrentTip
+    next <- getNextUp
+    return $ case (current, next) of
+        (Just current, Just next) -> printf "Currently playing %s. Next up is %s." (getUserOrTeam current) (getUserOrTeam next)
+        (Just current, Nothing) -> printf "Currently playing %s." (getUserOrTeam current)
+        (_, _) -> printf "Queue is empty."
+    )

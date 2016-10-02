@@ -28,6 +28,8 @@ library
                         , cereal
                         , directory
                         , strict
+                        , text
+                        , stm
   ghc-options:         -fwarn-incomplete-patterns
   default-language:    Haskell2010
 
