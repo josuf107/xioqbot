@@ -216,9 +216,9 @@ handleCommand Close = do
     msg "The queue is closed"
 handleCommand Start = do
     current <- getCurrentTip
-    currentDisplay <- maybe (return Nothing) (fmap Just . displayUserOrTeam) current
+    currentDisplay <- maybeM displayUserOrTeam current
     next <- getNextUp
-    nextDisplay <- maybe (return Nothing) (fmap Just . displayUserOrTeam) next
+    nextDisplay <- maybeM displayUserOrTeam next
     msg $ case (currentDisplay, nextDisplay) of
         (Just currentDisplay, Just nextDisplay) -> printf
             "The first match is beginning and the opponent is %s! Next up is %s!"
@@ -253,7 +253,7 @@ handleCommand Skip = do
     withQueueSetLosses (const 0)
     withQueueQueue (Seq.drop 1)
     current <- getCurrentTip
-    currentDisplay <- maybe (return Nothing) (fmap Just . displayUserOrTeam) current
+    currentDisplay <- maybeM displayUserOrTeam current
     msg $ case (skipped, currentDisplay) of
         (Nothing, _) -> "The queue is empty. No one to skip"
         (Just skipped, Nothing) -> printf "Skipped %s. The queue is now empty" (getUserOrTeam skipped)
@@ -558,7 +558,7 @@ endMatch winner loser = do
                         Just (nnid, miiname, wins, losses) -> withQueueIndex (Map.insert loserUser (nnid, miiname, wins, losses + 1))
                 _ -> return () -- We don't count doubles wins/losses
             current <- getCurrentTip
-            currentDisplay <- maybe (return Nothing) (fmap Just . displayUserOrTeam)  current
+            currentDisplay <- maybeM displayUserOrTeam current
             let winAndScoreMsg = printf "%s has won the set against %s! The score was %d:%d."
                     (getUserOrTeam winner)
                     (getUserOrTeam loser)
@@ -662,11 +662,14 @@ userOrTeamBasedOnMode user = get >>= \q -> case queueMode q of
 getQueueStatus :: Queue -> String
 getQueueStatus = evalState (do
     current <- getCurrentTip
-    currentDisplay <- maybe (return Nothing) (fmap Just . displayUserOrTeam) current
+    currentDisplay <- maybeM displayUserOrTeam current
     next <- getNextUp
-    nextDisplay <- maybe (return Nothing) (fmap Just . displayUserOrTeam) next
+    nextDisplay <- maybeM displayUserOrTeam next
     return $ case (currentDisplay, nextDisplay) of
         (Just currentDisplay, Just nextDisplay) -> printf "Currently Playing: %s - Up Next: %s -" currentDisplay nextDisplay
         (Just currentDisplay, Nothing) -> printf "Currently Playing: %s - There is no one else in the queue -" currentDisplay
         (_, _) -> printf "The queue is currently empty -"
     )
+
+maybeM :: Monad m => (a -> m b) -> Maybe a -> m (Maybe b)
+maybeM f = maybe (return Nothing) (fmap Just . f)
