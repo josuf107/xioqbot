@@ -662,9 +662,11 @@ userOrTeamBasedOnMode user = get >>= \q -> case queueMode q of
 getQueueStatus :: Queue -> String
 getQueueStatus = evalState (do
     current <- getCurrentTip
+    currentDisplay <- maybe (return Nothing) (fmap Just . displayUserOrTeam) current
     next <- getNextUp
-    return $ case (current, next) of
-        (Just current, Just next) -> printf "Currently playing %s. Next up is %s." (getUserOrTeam current) (getUserOrTeam next)
-        (Just current, Nothing) -> printf "Currently playing %s." (getUserOrTeam current)
-        (_, _) -> printf "Queue is empty."
+    nextDisplay <- maybe (return Nothing) (fmap Just . displayUserOrTeam) next
+    return $ case (currentDisplay, nextDisplay) of
+        (Just currentDisplay, Just nextDisplay) -> printf "Currently Playing: %s - Up Next: %s -" currentDisplay nextDisplay
+        (Just currentDisplay, Nothing) -> printf "Currently Playing: %s - There is no one else in the queue -" currentDisplay
+        (_, _) -> printf "The queue is currently empty -"
     )
