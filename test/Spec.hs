@@ -265,11 +265,11 @@ tests =
         user "mo" "!teamcreate mobetta"
         user "mo" "!teaminv zio"
         zio "!accept"
-        botSay "Sorry Zio. Please specify what team you want to join."
+        botSay "Sorry Zio. You have multiple team invites: Mobetta, Xfactor. Please specify which one you want to accept."
     , test "Accept (no default team)" $ do
         index "zio"
         zio "!accept"
-        botSay "Sorry Zio. Please specify what team you want to join."
+        botSay "Sorry Zio. You don't have any team invites."
     ]
 
 xio = user "xio"

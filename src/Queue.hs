@@ -405,14 +405,11 @@ handleCommand (TeamInvite inviter invited) = do
         addToSet v (Just s) = Just (Set.insert v s)
         addToSet v Nothing = Just (Set.singleton v)
 handleCommand (Accept user givenTeam) = do
-    singleInviteTeam <- getQueue (listToMaybe
-            . maybe [] Set.toList
-            . Map.lookup user
-            . Map.filter (\teams -> Set.size teams == 1)
-            . queueInvites)
+    openInvites <- getQueue (maybe [] Set.toList . Map.lookup user . queueInvites)
+    let singleInviteTeam = case openInvites of { (onlyInvite:[]) -> Just onlyInvite; _ -> Nothing; }
     let maybeTeam = listToMaybe (catMaybes [givenTeam, singleInviteTeam])
-    case maybeTeam of
-        Just team -> do
+    case (maybeTeam, openInvites) of
+        (Just team, _) -> do
             invited <- getQueue (maybe False (Set.member team) . Map.lookup user . queueInvites)
             teamSize <- getQueue (Map.size . Map.filter (==team) . queueTeams)
             existingTeam <- getQueue (Map.lookup user . queueTeams)
@@ -435,8 +432,11 @@ handleCommand (Accept user givenTeam) = do
                     msg $ printf "%s has joined team %s!"
                         (getTwitchUser user)
                         (getTeamName team)
-        Nothing -> msg $ printf "Sorry %s. Please specify what team you want to join."
+        (Nothing, []) -> msg $ printf "Sorry %s. You don't have any team invites."
             (getTwitchUser user)
+        (Nothing, invites) -> msg $ printf "Sorry %s. You have multiple team invites: %s. Please specify which one you want to accept."
+            (getTwitchUser user)
+            (intercalate ", " . fmap getTeamName $ invites)
 handleCommand (Decline user team) = do
     wasInvited <- getQueue (maybe False (Set.member team) . Map.lookup user . queueInvites)
     withQueueInvites (Map.adjust (Set.delete team) user)
