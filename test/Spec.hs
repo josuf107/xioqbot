@@ -249,6 +249,27 @@ tests =
         xio "!teaminv zio"
         zio "!accept xfactor"
         botSay "Zio has joined team Xfactor!"
+    , test "Accept (default team)" $ do
+        index "xio"
+        index "zio"
+        xio "!teamcreate xfactor"
+        xio "!teaminv zio"
+        zio "!accept"
+        botSay "Zio has joined team Xfactor!"
+    , test "Accept (several possible defaults)" $ do
+        index "xio"
+        index "zio"
+        index "mo"
+        xio "!teamcreate xfactor"
+        xio "!teaminv zio"
+        user "mo" "!teamcreate mobetta"
+        user "mo" "!teaminv zio"
+        zio "!accept"
+        botSay "Sorry Zio. Please specify what team you want to join."
+    , test "Accept (no default team)" $ do
+        index "zio"
+        zio "!accept"
+        botSay "Sorry Zio. Please specify what team you want to join."
     ]
 
 xio = user "xio"

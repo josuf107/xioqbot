@@ -404,29 +404,39 @@ handleCommand (TeamInvite inviter invited) = do
     where
         addToSet v (Just s) = Just (Set.insert v s)
         addToSet v Nothing = Just (Set.singleton v)
-handleCommand (Accept user team) = do
-    existingTeam <- getQueue (Map.lookup user . queueTeams)
-    teamSize <- getQueue (Map.size . Map.filter (==team) . queueTeams)
-    invited <- getQueue (maybe False (Set.member team) . Map.lookup user . queueInvites)
-    case (invited, teamSize, existingTeam) of
-        (_, 0, _) -> msg $ printf "Sorry %s, but team %s does not exist."
+handleCommand (Accept user givenTeam) = do
+    singleInviteTeam <- getQueue (listToMaybe
+            . maybe [] Set.toList
+            . Map.lookup user
+            . Map.filter (\teams -> Set.size teams == 1)
+            . queueInvites)
+    let maybeTeam = listToMaybe (catMaybes [givenTeam, singleInviteTeam])
+    case maybeTeam of
+        Just team -> do
+            invited <- getQueue (maybe False (Set.member team) . Map.lookup user . queueInvites)
+            teamSize <- getQueue (Map.size . Map.filter (==team) . queueTeams)
+            existingTeam <- getQueue (Map.lookup user . queueTeams)
+            case (invited, teamSize, existingTeam) of
+                (_, 0, _) -> msg $ printf "Sorry %s, but team %s does not exist."
+                    (getTwitchUser user)
+                    (getTeamName team)
+                (False, _, _) -> msg $ printf "Sorry %s, but you weren't invited to team %s."
+                    (getTwitchUser user)
+                    (getTeamName team)
+                (_, _, Just existingTeam) -> msg $ printf "Sorry %s, but you're already on team %s. Use !teamleave if you want to leave that team to join %s."
+                    (getTwitchUser user)
+                    (getTeamName existingTeam)
+                    (getTeamName team)
+                (_, 2, _) -> msg $ printf "Sorry %s, but team %s is already full."
+                    (getTwitchUser user)
+                    (getTeamName team)
+                (_, _, Nothing) -> do
+                    withQueueTeams (Map.insert user team)
+                    msg $ printf "%s has joined team %s!"
+                        (getTwitchUser user)
+                        (getTeamName team)
+        Nothing -> msg $ printf "Sorry %s. Please specify what team you want to join."
             (getTwitchUser user)
-            (getTeamName team)
-        (False, _, _) -> msg $ printf "Sorry %s, but you weren't invited to team %s."
-            (getTwitchUser user)
-            (getTeamName team)
-        (_, _, Just existingTeam) -> msg $ printf "Sorry %s, but you're already on team %s. Use !teamleave if you want to leave that team to join %s."
-            (getTwitchUser user)
-            (getTeamName existingTeam)
-            (getTeamName team)
-        (_, 2, _) -> msg $ printf "Sorry %s, but team %s is already full."
-            (getTwitchUser user)
-            (getTeamName team)
-        (_, _, Nothing) -> do
-            withQueueTeams (Map.insert user team)
-            msg $ printf "%s has joined team %s!"
-                (getTwitchUser user)
-                (getTeamName team)
 handleCommand (Decline user team) = do
     wasInvited <- getQueue (maybe False (Set.member team) . Map.lookup user . queueInvites)
     withQueueInvites (Map.adjust (Set.delete team) user)

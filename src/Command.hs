@@ -59,7 +59,7 @@ data Command
     -- team
     | NewTeam TwitchUser TeamName
     | TeamInvite TwitchUser TwitchUser
-    | Accept TwitchUser TeamName
+    | Accept TwitchUser (Maybe TeamName)
     | Decline TwitchUser TeamName
     | TeamInfo TeamName
     | LeaveTeam TwitchUser
@@ -143,7 +143,7 @@ commands =
         "Create a new team with the given name"
     , userCmd "teaminv" (\user -> TeamInvite user <$> userP)
         "Invite the given user to your team"
-    , userCmd "accept" (\user -> Accept user <$> teamP)
+    , userCmd "accept" (\user -> Accept user <$> maybeP teamP)
         "Accept an invitation to the given team"
     , userCmd "decline" (\user -> Decline user <$> teamP)
         "Decline an invitation to the given team"
