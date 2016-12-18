@@ -35,6 +35,7 @@ data Command
     | New
     | Open
     | Close
+    | SoftClose
     | Start
     | Win
     | Lose
@@ -99,6 +100,7 @@ commands =
         "Makes the given command not restricted. Doesn't work on default restricted commands."
     , restrictedCmd "smash new" (return New) "Creates a new queue"
     , restrictedCmd "smash open" (return Open) "Opens the queue to entrants"
+    , restrictedCmd "smash softclose" (return SoftClose) "Closes the queue to repeat entrants"
     , restrictedCmd "smash close" (return Close) "Closes the queue to entrants"
     , restrictedCmd "smash start" (return Start) "Starts queueing users/teams"
     , restrictedCmd "win" (return Win)
