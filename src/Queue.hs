@@ -374,12 +374,12 @@ handleCommand (Enter user) = do
     open <- getQueue queueOpen
     indexed <- getQueue (Map.member user . queueIndex)
     maybeUserOrTeam <- userOrTeamBasedOnMode user
+    userOrTeamInSoftCloseList <- getQueue (Set.member maybeUserOrTeam . Set.map Just . queueSoftClosedList)
     queueIsSoftClosed <- getQueue queueSoftClose
     case (queueIsSoftClosed, maybeUserOrTeam) of
         (False, _) -> return ()
         (True, Nothing) -> return ()
         (True, Just userOrTeam) -> withQueueSoftClosedList (Set.insert userOrTeam)
-    userOrTeamInSoftCloseList <- getQueue (Set.member maybeUserOrTeam . Set.map Just . queueSoftClosedList)
     let userOrTeamSoftClosed = queueIsSoftClosed && userOrTeamInSoftCloseList
     queue <- getQueue queueQueue
     let alreadyInQueue = maybe False (isJust . flip Seq.elemIndexL queue) maybeUserOrTeam
