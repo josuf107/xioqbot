@@ -125,6 +125,8 @@ putQueue q = do
     putq (queueRestricted)
     putq (fmap Serial . queueQueue)
     putq queueOpen
+    putq queueSoftClose
+    putq (Set.map Serial . queueSoftClosedList)
     putq (Map.mapKeys getTwitchUser . fmap getTeamName . queueTeams)
     putq (getTwitchUser . queueStreamer)
     mapM_ putq [queueSetWins, queueSetLosses, queueCrewStockA, queueCrewStockB]
@@ -169,6 +171,8 @@ getQueue = do
         , getModify withQueueRestricted
         , getModify' withQueueQueue
         , getSet setQueueOpen
+        , getSet setQueueSoftClose
+        , getModify' withQueueSoftClosedList
         , getModify' withQueueTeams
         , getSet' setQueueStreamer
         , getModify withQueueSetWins

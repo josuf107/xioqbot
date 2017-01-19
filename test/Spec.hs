@@ -270,6 +270,14 @@ tests =
         index "zio"
         zio "!accept"
         botSay "Sorry Zio. You don't have any team invites."
+    , test "SoftClose" $ do
+        streamer "!smash open"
+        streamer "!smash softclose"
+        indexAndEnter "xio"
+        botSay "Xio, you've now been placed into the queue at position 1! Type !info to see your position and !friendme if you've yet to add Josuf107."
+        streamer "!smash skip"
+        xio "!enter"
+        botSay "Sorry Xio, you can't join the queue again because it is soft closed!"
     ]
 
 xio = user "xio"

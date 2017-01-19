@@ -6,6 +6,8 @@ import Persist
 import Data.Serialize
 import qualified Data.ByteString as BS
 
+import Data.Monoid
+
 migrate :: IO ()
 migrate = do
     queueFile <- mostRecentQueueFile
@@ -35,7 +37,34 @@ instance Serialize OldSerialQueue where
 
 getOldQueue :: Get Queue
 getOldQueue = do
-    index <- fmap ungenericizeIndex get
-    return $ defaultQueue
-        { queueIndex = index
-        }
+    parts <- sequence
+        [ getSet setQueueOn
+        , getSet' setQueueLastMessage
+        , getSet' setQueueMode
+        , getModify' withQueueAdmins
+        , getModify withQueueRestricted
+        , getModify' withQueueQueue
+        , getSet setQueueOpen
+        , getModify' withQueueTeams
+        , getSet' setQueueStreamer
+        , getModify withQueueSetWins
+        , getModify withQueueSetLosses
+        , getSet setQueueCrewStockA
+        , getSet setQueueCrewStockB
+        , getModify' withQueueFriendMes
+        , getModifyF ungenericizeIndex withQueueIndex
+        , getSet setQueueRulesSingles
+        , getSet setQueueRulesDoubles
+        , getModify' withQueueHereMap
+        , getModify' withQueueInvites
+        , getSet setQueueDenyReply
+        , getSet setQueueWinBuffer
+        , getSet setQueueListBuffer
+        , getSet setQueueSinglesLimit
+        , getSet setQueueDoublesLimit
+        , getSet setQueueReenterWait
+        , getSet setQueueHereAlert
+        , getSet setQueueSinglesBestOf
+        , getSet setQueueDoublesBestOf
+        ]
+    return $ appEndo (mconcat parts) defaultQueue

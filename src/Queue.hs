@@ -39,6 +39,8 @@ data Queue
     , queueAdmins :: Set.Set TwitchUser
     , queueRestricted :: Set.Set String
     , queueQueue :: Seq.Seq UserOrTeam
+    , queueSoftClosedList :: Set.Set UserOrTeam
+    , queueSoftClose :: Bool
     , queueOpen :: Bool
     , queueTeams :: Map.Map TwitchUser TeamName
     , queueStreamer :: TwitchUser
@@ -74,6 +76,8 @@ defaultQueue = Queue
     , queueRestricted = Set.empty
     , queueQueue = Seq.empty
     , queueOpen = False
+    , queueSoftClosedList = Set.empty
+    , queueSoftClose = False
     , queueTeams = Map.empty
     , queueStreamer = twitchUser "josuf107"
     , queueSetWins = 0
@@ -115,6 +119,10 @@ withQueueRestricted :: QueueModify (Set.Set String)
 withQueueRestricted f = modify $ \q -> q { queueRestricted = f (queueRestricted q) }
 withQueueQueue :: QueueModify (Seq.Seq UserOrTeam)
 withQueueQueue f = modify $ \q -> q { queueQueue = f (queueQueue q) }
+withQueueSoftClosedList :: QueueModify (Set.Set UserOrTeam)
+withQueueSoftClosedList f = modify $ \q -> q { queueSoftClosedList = f (queueSoftClosedList q) }
+setQueueSoftClose :: QueueSet Bool
+setQueueSoftClose v = modify $ \q -> q { queueSoftClose = v }
 setQueueOpen :: QueueSet Bool
 setQueueOpen v = modify $ \q -> q { queueOpen = v }
 withQueueTeams :: QueueModify (Map.Map TwitchUser TeamName)
@@ -210,10 +218,18 @@ handleCommand New = do
     msg "Created a new queue!"
 handleCommand Open = do
     setQueueOpen True
+    setQueueSoftClose False
+    withQueueSoftClosedList (const Set.empty)
     msg "The queue is open! Type !enter to enter"
 handleCommand Close = do
     setQueueOpen False
+    setQueueSoftClose False
+    withQueueSoftClosedList (const Set.empty)
     msg "The queue is closed"
+handleCommand SoftClose = do
+    setQueueSoftClose True
+    withQueueSoftClosedList (const Set.empty)
+    msg "The queue is closed to repeat entrants"
 handleCommand Start = do
     current <- getCurrentTip
     currentDisplay <- maybeM displayUserOrTeam current
@@ -358,16 +374,25 @@ handleCommand (Enter user) = do
     open <- getQueue queueOpen
     indexed <- getQueue (Map.member user . queueIndex)
     maybeUserOrTeam <- userOrTeamBasedOnMode user
+    userOrTeamInSoftCloseList <- getQueue (Set.member maybeUserOrTeam . Set.map Just . queueSoftClosedList)
+    queueIsSoftClosed <- getQueue queueSoftClose
+    case (queueIsSoftClosed, maybeUserOrTeam) of
+        (False, _) -> return ()
+        (True, Nothing) -> return ()
+        (True, Just userOrTeam) -> withQueueSoftClosedList (Set.insert userOrTeam)
+    let userOrTeamSoftClosed = queueIsSoftClosed && userOrTeamInSoftCloseList
     queue <- getQueue queueQueue
     let alreadyInQueue = maybe False (isJust . flip Seq.elemIndexL queue) maybeUserOrTeam
     streamer <- getQueue queueStreamer
-    case (open, indexed, maybeUserOrTeam, alreadyInQueue) of
-        (False, _, _, _) -> msg "Sorry the queue is closed so you can't !enter. An admin must use !smash open to open the queue."
-        (_, False, _, _) -> msg $ printf "%s is not in the index. Add yourself with !index NNID MiiName." (getTwitchUser user)
-        (_, _, Nothing, _) -> msg $ printf "Couldn't add %s to queue. Try joining a team." (getTwitchUser user)
-        (_, _, Just userOrTeam, True) -> msg $ printf "Sorry %s, you can't join the queue more than once!"
+    case (open, indexed, maybeUserOrTeam, alreadyInQueue, userOrTeamSoftClosed) of
+        (False, _, _, _, _) -> msg "Sorry the queue is closed so you can't !enter. An admin must use !smash open to open the queue."
+        (_, False, _, _, _) -> msg $ printf "%s is not in the index. Add yourself with !index NNID MiiName." (getTwitchUser user)
+        (_, _, Nothing, _, _) -> msg $ printf "Couldn't add %s to queue. Try joining a team." (getTwitchUser user)
+        (_, _, Just userOrTeam, True, _) -> msg $ printf "Sorry %s, you can't join the queue more than once!"
                 (getUserOrTeam userOrTeam)
-        (_, _, Just userOrTeam, False) -> do
+        (_, _, Just userOrTeam, _, True) -> msg $ printf "Sorry %s, you can't join the queue again because it is soft closed!"
+                (getUserOrTeam userOrTeam)
+        (_, _, Just userOrTeam, _, False) -> do
             withQueueQueue (Seq.|> userOrTeam)
             position <- getQueue (Seq.length . queueQueue)
             msg $ printf "%s, you've now been placed into the queue at position %d! Type !info to see your position and !friendme if you've yet to add %s."
