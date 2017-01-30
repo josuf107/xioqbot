@@ -278,6 +278,13 @@ tests =
         streamer "!smash skip"
         xio "!enter"
         botSay "Sorry Xio, you can't join the queue again because it is soft closed!"
+    , test "SoftClose index fail" $ do
+        streamer "!smash open"
+        streamer "!smash softclose"
+        xio "!enter"
+        botSay "Xio is not in the index. Add yourself with !index NNID MiiName."
+        indexAndEnter "xio"
+        botSay "Xio, you've now been placed into the queue at position 1! Type !info to see your position and !friendme if you've yet to add Josuf107."
     ]
 
 xio = user "xio"

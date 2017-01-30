@@ -376,10 +376,6 @@ handleCommand (Enter user) = do
     maybeUserOrTeam <- userOrTeamBasedOnMode user
     userOrTeamInSoftCloseList <- getQueue (Set.member maybeUserOrTeam . Set.map Just . queueSoftClosedList)
     queueIsSoftClosed <- getQueue queueSoftClose
-    case (queueIsSoftClosed, maybeUserOrTeam) of
-        (False, _) -> return ()
-        (True, Nothing) -> return ()
-        (True, Just userOrTeam) -> withQueueSoftClosedList (Set.insert userOrTeam)
     let userOrTeamSoftClosed = queueIsSoftClosed && userOrTeamInSoftCloseList
     queue <- getQueue queueQueue
     let alreadyInQueue = maybe False (isJust . flip Seq.elemIndexL queue) maybeUserOrTeam
@@ -394,6 +390,7 @@ handleCommand (Enter user) = do
                 (getUserOrTeam userOrTeam)
         (_, _, Just userOrTeam, _, False) -> do
             withQueueQueue (Seq.|> userOrTeam)
+            when queueIsSoftClosed (withQueueSoftClosedList (Set.insert userOrTeam))
             position <- getQueue (Seq.length . queueQueue)
             msg $ printf "%s, you've now been placed into the queue at position %d! Type !info to see your position and !friendme if you've yet to add %s."
                 (getUserOrTeam userOrTeam)
