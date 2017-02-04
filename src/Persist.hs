@@ -1,7 +1,7 @@
 module Persist where
 
 import Command
-import Queue
+import Queue hiding (getQueue)
 
 import Control.Monad.State (execState)
 import Data.List
