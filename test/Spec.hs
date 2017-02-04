@@ -1,12 +1,14 @@
-import Queue hiding (test)
+import Queue
 import Command
+import CommandParser
+import CommandHandler
 
 import Control.Monad.Writer
 import Control.Monad.State
-import Data.Monoid
 import Data.Time
 import System.Exit
 
+tests :: [Test]
 tests =
     [ test "Off" $ do
         streamer "!smash off"
@@ -76,7 +78,7 @@ tests =
     , test "Open opens the queue" $ do
         streamer "!smash open"
         indexAndEnter "xio"
-        botSay "Xio, you've now been placed into the queue at position 1! Type !info to see your position and !friendme if you've yet to add Josuf107."
+        botSay "Xio (xiomiiname), you've now been placed into the queue at position 1! Type !info to see your position and !friendme if you've yet to add Josuf107."
     , test "Close" $ do
         streamer "!smash close"
         botSay "The queue is closed"
@@ -137,7 +139,7 @@ tests =
         indexAndEnter "xio"
         streamer "!smash start"
         streamer "!win"
-        botSay "Josuf107 has just won a match against Xio! The score is 1:0 and it requires 2 to take the set"
+        botSay "Josuf107 has just won a match against Xio (xiomiiname)! The score is 1:0 and it requires 2 to take the set"
     , test "Win (streamer takes set; two in queue)" $ do
         streamer "!smash open"
         indexAndEnter "xio"
@@ -146,7 +148,7 @@ tests =
         streamer "!win"
         streamer "!lose"
         streamer "!win"
-        botSay "Josuf107 has won the set against Xio! The score was 2:1. Next up is Zio (ziomiiname)!"
+        botSay "Josuf107 has won the set against Xio (xiomiiname)! The score was 2:1. Next up is Zio (ziomiiname)!"
     , test "Win (streamer takes set; one in queue)" $ do
         streamer "!smash open"
         indexAndEnter "xio"
@@ -154,7 +156,7 @@ tests =
         streamer "!win"
         streamer "!lose"
         streamer "!win"
-        botSay "Josuf107 has won the set against Xio! The score was 2:1."
+        botSay "Josuf107 has won the set against Xio (xiomiiname)! The score was 2:1."
     , test "Win (doubles; streamer takes set; two in queue)" $ do
         streamer "!smash mode doubles"
         streamer "!smash open"
@@ -178,14 +180,14 @@ tests =
         streamer "!win"
         streamer "!lose"
         streamer "!win"
-        botSay "Steamrollers has won the set against Xioteam! The score was 2:1. Next up is A-team (amiiname & bmiiname)!"
+        botSay "Steamrollers (bromiiname) has won the set against Xioteam (xiomiiname & ziomiiname)! The score was 2:1. Next up is A-team (amiiname & bmiiname)!"
     , test "Skip (two in queue)" $ do
         streamer "!smash open"
         indexAndEnter "xio"
         indexAndEnter "zio"
         streamer "!smash start"
         streamer "!smash skip"
-        botSay "Skipped Xio. Next up is Zio (ziomiiname)!"
+        botSay "Skipped Xio (xiomiiname). Next up is Zio (ziomiiname)!"
     , test "Skip (doubles; two in queue)" $ do
         streamer "!smash mode doubles"
         streamer "!smash open"
@@ -203,14 +205,14 @@ tests =
         user "a" "!enter"
         streamer "!smash start"
         streamer "!smash skip"
-        botSay "Skipped Xfactor. Next up is A-team (amiiname & bmiiname)!"
+        botSay "Skipped Xfactor (xiomiiname & ziomiiname). Next up is A-team (amiiname & bmiiname)!"
     , test "Move" $ do
         streamer "!smash open"
         indexAndEnter "xio"
         indexAndEnter "zio"
         streamer "!smash move zio 0"
         streamer "!list"
-        botSay "Currently playing Zio. Next in queue: Xio (xiomiiname)"
+        botSay "Currently playing Zio (ziomiiname). Next in queue: Xio (xiomiiname)"
     , test "Can't enter closed queue" $ do
         user "a" "!enter"
         botSay "Sorry the queue is closed so you can't !enter. An admin must use !smash open to open the queue."
@@ -221,7 +223,7 @@ tests =
     , test "Can enter indexed users into open queue" $ do
         streamer "!smash open"
         indexAndEnter "a"
-        botSay "A, you've now been placed into the queue at position 1! Type !info to see your position and !friendme if you've yet to add Josuf107."
+        botSay "A (amiiname), you've now been placed into the queue at position 1! Type !info to see your position and !friendme if you've yet to add Josuf107."
     , test "Non-enqueued info output formatted properly" $ do
         user "xio" "!index xionnid xiomii"
         user "xio" "!info"
@@ -274,23 +276,41 @@ tests =
         streamer "!smash open"
         streamer "!smash softclose"
         indexAndEnter "xio"
-        botSay "Xio, you've now been placed into the queue at position 1! Type !info to see your position and !friendme if you've yet to add Josuf107."
+        botSay "Xio (xiomiiname), you've now been placed into the queue at position 1! Type !info to see your position and !friendme if you've yet to add Josuf107."
         streamer "!smash skip"
         xio "!enter"
-        botSay "Sorry Xio, you can't join the queue again because it is soft closed!"
+        botSay "Sorry Xio (xiomiiname), you can't join the queue again because it is soft closed!"
     , test "SoftClose index fail" $ do
         streamer "!smash open"
         streamer "!smash softclose"
         xio "!enter"
         botSay "Xio is not in the index. Add yourself with !index NNID MiiName."
         indexAndEnter "xio"
-        botSay "Xio, you've now been placed into the queue at position 1! Type !info to see your position and !friendme if you've yet to add Josuf107."
+        botSay "Xio (xiomiiname), you've now been placed into the queue at position 1! Type !info to see your position and !friendme if you've yet to add Josuf107."
+    , test "List friendmes" $ do
+        streamer "!smash open"
+        streamer "!smash start"
+        indexAndEnter "xio"
+        xio "!friendme"
+        indexAndEnter "zio"
+        zio "!friendme"
+        index "bob"
+        user "bob" "!friendme"
+        streamer "!friendme list"
+        botSay "Next 10 friendmes in the queue: Xio+ (xiomiiname), Zio+ (ziomiiname)"
     ]
 
+xio :: String -> TestSpec
 xio = user "xio"
+
+zio :: String -> TestSpec
 zio = user "zio"
+
+index :: String -> TestSpec
 index u = do
     user u ("!index " ++ u ++ "nnid " ++ u ++ "miiname")
+
+indexAndEnter :: String -> Writer [TestStep] ()
 indexAndEnter u = do
     index u
     user u "!enter"
@@ -301,17 +321,25 @@ main = do
     results <- mapM runTest tests
     when (any (/=Pass) results) exitFailure
 
+test :: String -> TestSpec -> Test
 test desc spec = Test spec desc
+
 wait :: Seconds -> TestSpec
 wait = tellOne . Wait
+
 streamer :: String -> TestSpec
 streamer = tellOne . StreamerSay
+
 user :: String -> String -> TestSpec
 user u = tellOne . UserSay (twitchUser u)
+
 botSay :: String -> TestSpec
 botSay = tellOne . BotSay . Just
+
 botSayNothing :: TestSpec
 botSayNothing = tellOne (BotSay Nothing)
+
+tellOne :: TestStep -> Writer [TestStep] ()
 tellOne = tell . return
 
 data TestStep
@@ -353,6 +381,7 @@ runSteps steps =
         [] -> Pass
         (f:_) -> f
 
+testStateStart :: TestState
 testStateStart = TestState
     (UTCTime (fromGregorian 2016 8 10) 0)
     defaultQueue

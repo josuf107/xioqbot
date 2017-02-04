@@ -12,11 +12,12 @@ import System.IO
 import Text.Printf
 import Text.ParserCombinators.ReadP
 
-import Command hiding (spaceP, commandP, twitchUser)
-import qualified Command
-import Queue hiding (spaceP, commandP, Message)
+import CommandHandler (handleTimestamped, getQueueStatus)
 import Persist
+import Util
+import qualified CommandParser (parseCommand, twitchUser)
 import qualified Display
+import Queue (Queue, defaultQueue)
 
 data Message
     = Message
@@ -32,33 +33,40 @@ messageP = do
     command <- commandP
     params <- paramsP
     return (Message user command params)
+
+prefixP, spaceP, commandP, middleP, trailingP :: ReadP String
 prefixP = many1 nonSpaceP
 spaceP = many1 (char ' ')
 commandP = choice [many1 (satisfy isLetter), replicateM 3 numberP]
+numberP :: ReadP Char
 numberP = satisfy isDigit
-paramsP = go []
-    where
-        go params = do
-            spaceP
-            choice [
-                char ':' >> fmap return trailingP,
-                middleP >>= \middle -> fmap (middle:) paramsP]
+paramsP :: ReadP [String]
+paramsP = do
+    void spaceP
+    choice [
+        char ':' >> fmap return trailingP,
+        middleP >>= \middle -> fmap (middle:) paramsP]
 middleP = do
     firstChar <- satisfy (/=':')
     remainder <- many nonSpaceP
     return (firstChar:remainder)
 trailingP = manyTill get eof
+nonSpaceP :: ReadP Char
 nonSpaceP = satisfy (/=' ')
 
+parseMessage :: String -> Message
 parseMessage msg = case readP_to_S messageP msg of
     ((cmd, []):_) -> cmd
     x -> error $ "Failed to parse " ++ show x
 
+twitchServer :: HostName
 twitchServer = "irc.chat.twitch.tv"
-twitchPort = 6667
+
+twitchPort :: PortID
+twitchPort = PortNumber 6667
 
 connectTwitch :: IO Handle
-connectTwitch = connectTo twitchServer (PortNumber twitchPort)
+connectTwitch = connectTo twitchServer twitchPort
 
 loadAndUpdateQueue :: IO Queue
 loadAndUpdateQueue = do
@@ -66,7 +74,7 @@ loadAndUpdateQueue = do
     (queueStart, logs) <- case maybeQueueAndLogs of
         Left errorMessage -> putStrLn errorMessage >> return (defaultQueue, [])
         Right (q, logs) -> return (q, logs)
-    return $ foldr (\(time, user, msg) -> fst . handleTimestamped user time (parseCommand user msg)) queueStart logs
+    return $ foldr (\(time, user, msg) -> fst . handleTimestamped user time (CommandParser.parseCommand user msg)) queueStart logs
 
 talk :: String -> String -> String -> IO ()
 talk twitchUser twitchToken twitchChannel = do
@@ -101,9 +109,9 @@ handleMessage twitchChannel conn msg q = do
     case parseMessage msg of
         (Message (Just userString) "PRIVMSG" (_:params)) -> do
             let messageText = reverse . drop 1 . reverse . unwords $ params
-            let user = Command.twitchUser userString
+            let user = CommandParser.twitchUser userString
             logMessage q time user messageText
-            let cmd = parseCommand user messageText
+            let cmd = CommandParser.parseCommand user messageText
             let (q', maybeReturnMessage) = handleTimestamped user time cmd q
             case maybeReturnMessage of
                 Just returnMessage -> write conn "PRIVMSG" (twitchChannel ++ " :" ++ returnMessage)

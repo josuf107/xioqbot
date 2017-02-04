@@ -1,7 +1,7 @@
 module Persist where
 
 import Command
-import Queue hiding (getQueue)
+import Queue
 
 import Control.Monad.State (execState)
 import Data.List
@@ -10,8 +10,6 @@ import Data.Monoid
 import Data.Serialize
 import Data.Time
 import Data.Time.Clock.POSIX
-import Data.Word
-import GHC.Real
 import System.Directory
 import System.IO hiding (hGetContents)
 import System.IO.Strict (hGetContents)
@@ -24,7 +22,7 @@ type LogMessage = (UTCTime, TwitchUser, String)
 
 getMillisFileName :: IO String
 getMillisFileName = fmap
-    (show . floor . (*1000) . utcTimeToPOSIXSeconds)
+    (show . (floor :: RealFrac a => a -> Integer) . (*1000) . utcTimeToPOSIXSeconds)
     getCurrentTime
 
 logMessage :: Queue -> UTCTime -> TwitchUser -> String -> IO ()
@@ -69,8 +67,8 @@ snapshotQueue fp q = do
 
 loadMostRecentQueue :: IO (Either String Queue)
 loadMostRecentQueue = do
-    queueFile <- mostRecentQueueFile
-    case queueFile of
+    maybeQueueFile <- mostRecentQueueFile
+    case maybeQueueFile of
         (Just queueFile) -> fmap decodeQueue (BS.readFile queueFile)
         Nothing -> return $ Left "No snapshots"
 

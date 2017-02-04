@@ -2,18 +2,16 @@
 module Display where
 
 import Control.Concurrent.STM
-import Control.Concurrent.STM.TVar
-import Data.Time
-import Data.Text as Text
 import Network.Wai.Handler.Warp
 import Network.Wai
 import Network.HTTP.Types
 import qualified Data.ByteString.Lazy.Char8 as LBS
-import qualified Data.ByteString.Char8 as BS
 
+display :: TVar String -> IO ()
 display statusLine = do
     run 4444 (myApp statusLine)
 
+myApp :: TVar String -> Request -> (Response -> IO a) -> IO a
 myApp statusLine req respond = do
     status <- atomically (readTVar statusLine)
     case pathInfo req of
@@ -21,6 +19,7 @@ myApp statusLine req respond = do
         ("status":[]) -> respond (responseLBS status200 [] (LBS.pack status))
         _ -> respond (responseLBS status400 [] (LBS.pack "Not found"))
 
+html :: String
 html =
     "<html> \
         \<head> \
