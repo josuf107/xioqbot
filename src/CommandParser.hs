@@ -57,10 +57,10 @@ commands =
         "Clear friendme's in the queue, with optional limit"
     , cmd "help" (Help <$> remainderP)
         "Print help for the given command"
-    , userCmd "nnid" (return . GetNNID)
-        "Display the nnid qbot has for you"
-    , userCmd "index" (\user -> Index user <$> nnidP <*> miiP)
-        "Add yourself to the index with given nnid and miiname"
+    , userCmd "tag" (return . GetSmashTag)
+        "Display the smash tag qbot has for you"
+    , userCmd "index" (\user -> Index user <$> smashTagP <*> dolphinP)
+        "Add yourself to the index with given smash tag and preferred dolphin version"
     , userCmd "friendme" (return . Friend)
         "Mark yourself as needing to be friended"
     , cmd "list" (List <$> maybeP intP)
@@ -135,16 +135,13 @@ commandP user = do
     return (commandSpec, result)
 
 twitchUser :: String -> TwitchUser
-twitchUser = asUpperCase TwitchUser
+twitchUser = TwitchUser
 
 teamName :: String -> TeamName
-teamName = asUpperCase TeamName
+teamName = TeamName
 
 userOrTeam :: String -> UserOrTeam
-userOrTeam = asUpperCase UserOrTeam
-
-asUpperCase :: (String -> a) -> String -> a
-asUpperCase f i = f $ (fmap toUpper . take 1 $ i) ++ (drop 1 i)
+userOrTeam = UserOrTeam
 
 modeP :: ReadP Mode
 modeP = spaceP >> choice
@@ -160,11 +157,16 @@ mapStringP s r = string s >> return r
 userP :: ReadP TwitchUser
 userP = typedIdentifierP twitchUser
 
-nnidP :: ReadP NNID
-nnidP = typedIdentifierP NNID
+smashTagP :: ReadP SmashTag
+smashTagP = typedIdentifierP SmashTag
 
-miiP :: ReadP MiiName
-miiP = fmap MiiName remainderP
+dolphinP :: ReadP DolphinVersion
+dolphinP = do
+    dolphinVersion <- fmap toLower <$> remainderP
+    return $
+        if dolphinVersion == "slippi" then Slippi
+        else if dolphinVersion == "fm" then FM
+        else InvalidDolphin dolphinVersion
 
 userOrTeamP :: ReadP UserOrTeam
 userOrTeamP = typedIdentifierP userOrTeam

@@ -3,8 +3,8 @@ module Command where
 import Text.ParserCombinators.ReadP
 
 data Mode = Singles | Doubles | Crew | InvalidMode String deriving (Show, Eq, Ord)
-newtype NNID = NNID { getNNID :: String } deriving (Show, Eq, Ord)
-newtype MiiName = MiiName { getMiiName :: String } deriving (Show, Eq, Ord)
+newtype SmashTag = SmashTag { getSmashTag :: String } deriving (Show, Eq, Ord)
+data DolphinVersion = Slippi | FM | InvalidDolphin String deriving (Show, Eq, Ord, Read)
 newtype TwitchUser = TwitchUser { getTwitchUser :: String } deriving (Show, Read, Eq, Ord)
 newtype TeamName = TeamName { getTeamName :: String } deriving (Show, Eq, Ord)
 newtype UserOrTeam = UserOrTeam { getUserOrTeam :: String } deriving (Show, Eq, Ord)
@@ -44,8 +44,8 @@ data Command
     | FriendClear (Maybe Position)
     -- general
     | Help String
-    | GetNNID TwitchUser
-    | Index TwitchUser NNID MiiName
+    | GetSmashTag TwitchUser
+    | Index TwitchUser SmashTag DolphinVersion
     | Friend TwitchUser
     | List (Maybe Int)
     | RuleSet (Maybe Mode)

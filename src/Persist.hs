@@ -204,12 +204,6 @@ instance Serialize' TeamName where
 instance Serialize' UserOrTeam where
     put' = put . getUserOrTeam
     get' = fmap UserOrTeam get
-instance Serialize' NNID where
-    put' = put . getNNID
-    get' = fmap NNID get
-instance Serialize' MiiName where
-    put' = put . getMiiName
-    get' = fmap MiiName get
 instance Serialize' Mode where
     put' mode = case mode of
         Singles -> putWord8 0
@@ -249,15 +243,27 @@ instance (Ord k, Serialize' k, Serialize' v) => Serialize' (Map.Map k v) where
     get' = fmap (Map.mapKeys getSerial . fmap getSerial) get
 
 genericizeIndex
-    :: Map.Map TwitchUser (NNID, MiiName, Int, Int)
+    :: Map.Map TwitchUser IndexEntry
     -> Map.Map String (String, String, Int, Int)
 genericizeIndex
     = Map.mapKeys getTwitchUser
-    . fmap (\(NNID nnid, MiiName mii, w, l) -> (nnid, mii, w, l))
+    . fmap genericizeIndexEntry
+
+genericizeIndexEntry :: IndexEntry -> (String, String, Int, Int)
+genericizeIndexEntry entry =
+    ( getSmashTag . indexedSmashTag $ entry
+    , show . indexedDolphinVersion $ entry
+    , indexedWins $ entry
+    , indexedLosses $ entry
+    )
 
 ungenericizeIndex
     :: Map.Map String (String, String, Int, Int)
-    -> Map.Map TwitchUser (NNID, MiiName, Int, Int)
+    -> Map.Map TwitchUser IndexEntry
 ungenericizeIndex
     = Map.mapKeys TwitchUser
-    . fmap (\(nnid, mii, w, l) -> (NNID nnid, MiiName mii, w, l))
+    . fmap ungenericizeIndexEntry
+
+ungenericizeIndexEntry :: (String, String, Int, Int) -> IndexEntry
+ungenericizeIndexEntry (smashTag, dolphinVersion, wins, losses) =
+    IndexEntry (SmashTag smashTag) (read dolphinVersion) wins losses

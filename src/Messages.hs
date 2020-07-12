@@ -44,12 +44,13 @@ instance Print a => Print (Maybe a) where
 instance Print TwitchUser where
     print = msg . getTwitchUser
 
-instance Print MiiName where
-    print = msg . getMiiName
-    printList = msg . intercalate " & " . fmap getMiiName
+instance Print DolphinVersion where
+    print Slippi = msg "Slippi r18"
+    print FM = msg "FM v5.9"
+    print (InvalidDolphin invalid) = msg invalid
 
-instance Print NNID where
-    print = msg . getNNID
+instance Print SmashTag where
+    print = msg . getSmashTag
 
 instance Print TeamName where
     print = msg . getTeamName
@@ -64,6 +65,14 @@ instance Print CrewSide where
 instance Print Int where
     print = msg . show
 
+data UserIdentifier = UserIdentifier { userTwitch :: TwitchUser, userTag :: SmashTag } deriving (Show, Eq, Ord)
+
+instance Print UserIdentifier where
+    print userId = userTag userId & " (" % userTwitch userId % ")"
+
+userIdentifier :: TwitchUser -> IndexEntry -> UserIdentifier
+userIdentifier user indexEntry = UserIdentifier user (indexedSmashTag indexEntry)
+
 (&) :: (Print a, Print b) => a -> b -> State Queue (Maybe String)
 a & b = do
     maybePart1 <- print a
@@ -77,7 +86,7 @@ s % b = do
     msg . concat . catMaybes $ [maybePart1, maybePart2]
 
 msg :: String -> State Queue (Maybe String)
-msg m = return (Just m)
+msg = return . Just
 
 noMsg :: State Queue (Maybe String)
 noMsg = return Nothing
@@ -119,10 +128,12 @@ closeMsg = msg "The queue is closed"
 softCloseMsg :: Msg_
 softCloseMsg = msg "The queue is closed to repeat entrants"
 
-startMsg :: Msg (Maybe UserOrTeam, Maybe UserOrTeam)
-startMsg (Just current, Just next) = "The first match is beginning and the opponent is " & current % "! Next up is " % next % "!"
-startMsg (Just current, Nothing) = "The first match is beginning and the opponent is " & current % "!"
-startMsg (Nothing, _) = msg "Can't start because the queue is empty!"
+startMsg :: Print a => Msg (Maybe a, Maybe a)
+startMsg context =
+    case context of
+        (Just current, Just next) -> "The first match is beginning and the opponent is " & current % "! Next up is " % next % "!"
+        (Just current, Nothing) -> "The first match is beginning and the opponent is " & current % "!"
+        (Nothing, _) -> msg "Can't start because the queue is empty!"
 
 setWinMsg :: Msg (UserOrTeam, UserOrTeam, Int, Int, Maybe UserOrTeam)
 setWinMsg (winner, loser, setWins, setLosses, (Just next)) = winner
@@ -170,12 +181,15 @@ friendListMsg (limit, friendMes) = "Next " & limit % " friendmes in the queue: "
 friendListClearMsg :: Msg Int
 friendListClearMsg limit = "Cleared friend list with limit " & limit
 
-getNNIDMsg :: Msg (TwitchUser, Maybe (NNID, a, b, c))
-getNNIDMsg (user, Just (nnid, _, _, _)) = user & "'s NNID is " % nnid % "."
-getNNIDMsg (user, Nothing) = user & " is not in the index. Try !index NNID MiiName."
+getSmashTagMsg :: Msg (TwitchUser, Maybe IndexEntry)
+getSmashTagMsg (user, Just indexEntry) = user & "'s tag is " % (indexedSmashTag indexEntry) % "."
+getSmashTagMsg (user, Nothing) = user & " is not in the index. Try !index smashTag dolphin version."
 
-indexMsg :: Msg TwitchUser
-indexMsg user = "Added " & user % " to index"
+badDolphinMsg :: Msg (TwitchUser, String)
+badDolphinMsg (user, badDolphin) = "Sorry " & user % ", " % badDolphin % " is not a valid dolphin version. You can specify \"Slippi\" or \"FM\""
+
+indexMsg :: Msg (TwitchUser, IndexEntry)
+indexMsg (user, info) = "Added " & indexedSmashTag info % " (" % user % ") to index"
 
 friendMeMsg :: Msg TwitchUser
 friendMeMsg user = "Added " & user % " to friendme list"
@@ -202,35 +216,19 @@ notInTheQueueMsg userOrTeam = userOrTeam & " is not in the queue, so I can't rem
 removedMsg :: Msg UserOrTeam
 removedMsg userOrTeam = "Removed " & userOrTeam % " from the queue."
 
-infoMsg :: Msg (TwitchUser, Int, Maybe (NNID, MiiName, Int, Int), Maybe Int)
+infoMsg :: Msg (TwitchUser, Int, Maybe IndexEntry, Maybe Int)
 infoMsg (user, _, Nothing, _) = user & " is not in the index. Add yourself with !index NNID MiiName."
-infoMsg (user, _, Just (nnid, miiName, wins, losses), Nothing) =
+infoMsg (user, _, Just indexEntry, Nothing) =
     "| User: " & user
-    % " | NNID: " % nnid
-    % " | MiiName: " % miiName
-    % " | W:L " % wins % ":" % losses % " |"
-infoMsg (user, queueSize, Just (nnid, miiName, wins, losses), Just position) =
+    % " | Tag: " % indexedSmashTag indexEntry
+    % " | W:L " % indexedWins indexEntry % ":" % indexedLosses indexEntry % " |"
+    % " | Preferred Dolphin Version: " % indexedDolphinVersion indexEntry
+infoMsg (user, queueSize, Just indexEntry, Just position) =
     "| User: " & user
     % " | Position " % position % "/" % queueSize % " in Queue"
-    % " | NNID: " % nnid
-    % " | MiiName: " % miiName
-    % " | W:L " % wins % ":" % losses % " |"
-
-enterMsg :: Msg (TwitchUser, TwitchUser, Bool, Bool, Maybe UserOrTeam, Bool, Bool, Int)
-enterMsg (streamer, user, open, indexed, maybeUserOrTeam, alreadyInQueue, userOrTeamSoftClosed, position) =
-    case (open, indexed, maybeUserOrTeam, alreadyInQueue, userOrTeamSoftClosed) of
-        (False, _, _, _, _) -> msg "Sorry the queue is closed so you can't !enter. An admin must use !smash open to open the queue."
-        (_, False, _, _, _) -> user & " is not in the index. Add yourself with !index NNID MiiName."
-        (_, _, Nothing, _, _) -> "Couldn't add " & user % " to queue. Try joining a team."
-        (_, _, Just userOrTeam, True, _) -> "Sorry " & userOrTeam
-            % ", you can't join the queue more than once!"
-        (_, _, Just userOrTeam, _, True) -> "Sorry " & userOrTeam
-            % ", you can't join the queue again because it is soft closed!"
-        (_, _, Just userOrTeam, _, False) -> userOrTeam
-            & ", you've now been placed into the queue at position "
-            % position
-            % "! Type !info to see your position and !friendme if you've yet to add "
-            % streamer % "."
+    % " | Tag: " % indexedSmashTag indexEntry
+    % " | W:L " % indexedWins indexEntry % ":" % indexedLosses indexEntry % " |"
+    % " | Preferred DolphinVersion: " % indexedDolphinVersion indexEntry
 
 hereMsg :: Msg TwitchUser
 hereMsg user = "Okay! " & user % " is ready!"
@@ -246,11 +244,9 @@ newTeamMsg (creator, team) = creator & " has created the new team "
 
 printUserOrTeam :: Msg UserOrTeam
 printUserOrTeam userOrTeam = do
-    friendMes <- fmap (Map.member userOrTeam) getFriendMesForMode
-    miiNames <- getMiiNames userOrTeam
-    let displayUserOrTeam = getUserOrTeam userOrTeam
-    case (friendMes, miiNames) of
-        (True, []) -> displayUserOrTeam & "+"
-        (False, []) -> print displayUserOrTeam
-        (True, miis) -> displayUserOrTeam & "+ (" % miis % ")"
-        (False, miis) -> displayUserOrTeam & " (" % miis % ")"
+    mode <- getQueue queueMode
+    if mode == Singles
+        then do
+            msg $ getUserOrTeam userOrTeam
+        else
+            msg $ getUserOrTeam userOrTeam

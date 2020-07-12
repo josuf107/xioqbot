@@ -11,6 +11,14 @@ import qualified Data.Map as Map
 import qualified Data.Sequence as Seq
 import qualified Data.Set as Set
 
+data IndexEntry
+    = IndexEntry
+    { indexedSmashTag :: SmashTag
+    , indexedDolphinVersion :: DolphinVersion
+    , indexedWins :: Int 
+    , indexedLosses :: Int
+    } deriving (Show, Eq, Ord)
+
 data Queue
     = Queue
     { queueOn :: Bool
@@ -29,7 +37,7 @@ data Queue
     , queueCrewStockA :: Int
     , queueCrewStockB :: Int
     , queueFriendMes :: Set.Set TwitchUser
-    , queueIndex :: Map.Map TwitchUser (NNID, MiiName, Int, Int)
+    , queueIndex :: Map.Map TwitchUser IndexEntry
     , queueRulesSingles :: String
     , queueRulesDoubles :: String
     , queueRulesCrew :: String
@@ -119,7 +127,7 @@ setQueueCrewStockB :: QueueSet Int
 setQueueCrewStockB v = modify $ \q -> q { queueCrewStockB = v }
 withQueueFriendMes :: QueueModify (Set.Set TwitchUser)
 withQueueFriendMes f = modify $ \q -> q { queueFriendMes = f (queueFriendMes q) }
-withQueueIndex :: QueueModify (Map.Map TwitchUser (NNID, MiiName, Int, Int))
+withQueueIndex :: QueueModify (Map.Map TwitchUser IndexEntry)
 withQueueIndex f = modify $ \q -> q { queueIndex = f (queueIndex q) }
 setQueueRulesSingles :: QueueSet String
 setQueueRulesSingles v = modify $ \q -> q { queueRulesSingles = v }
@@ -196,23 +204,6 @@ getRequiredWins = do
         Doubles -> getQueue queueDoublesBestOf
         _ -> return 0 -- This doesn't really make sense
     return (ceiling . (/(2::Double)) . fromIntegral $ bestOf)
-
-getMiiNames :: UserOrTeam -> State Queue [MiiName]
-getMiiNames userOrTeam = do
-    mode <- getQueue queueMode
-    case mode of
-        Singles -> do
-            let user = twitchUser . getUserOrTeam $ userOrTeam
-            lookupMii user
-        Doubles -> do
-            let team = TeamName . getUserOrTeam $ userOrTeam
-            users <- getQueue (Map.keys . Map.filter (==team) . queueTeams)
-            fmap concat (mapM lookupMii users)
-        Crew -> return [] -- TODO: Crew
-        InvalidMode _ -> return [] -- Shrug
-    where
-        extractMiiName (_, mii, _, _) = mii
-        lookupMii user = getQueue (fmap extractMiiName . maybeToList . Map.lookup user . queueIndex)
 
 userOrTeamBasedOnMode :: TwitchUser -> State Queue (Maybe UserOrTeam)
 userOrTeamBasedOnMode user = get >>= \q -> case queueMode q of

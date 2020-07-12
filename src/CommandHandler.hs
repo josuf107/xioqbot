@@ -76,7 +76,13 @@ handleCommand SoftClose = do
 handleCommand Start = do
     current <- getCurrentTip
     next <- getNextUp
-    startMsg (current, next)
+    mode <- getQueue queueMode
+    if mode == Singles
+        then do
+            currentIdentifier <- sequence $ lookupIdentifier . twitchUser . getUserOrTeam <$> current
+            nextIdentifier <- sequence $ lookupIdentifier . twitchUser . getUserOrTeam <$> next
+            startMsg (currentIdentifier, nextIdentifier)
+        else startMsg (current, next)
 handleCommand Win = do
     maybeOpponent <- getCurrentTip
     streamerUser <- getQueue queueStreamer
@@ -127,15 +133,22 @@ handleCommand (FriendClear maybeLimit) = do
         (\f -> withQueueFriendMes (appEndo . foldMap Endo . fmap Set.delete $ f))
         (Map.lookup userOrTeam friendMes)) friendMeQueue
     friendListClearMsg limit
-handleCommand (GetNNID user) = do
+handleCommand (GetSmashTag user) = do
     info <- getQueue (Map.lookup user . queueIndex)
-    getNNIDMsg (user, info)
-handleCommand (Index user nnid miid) = do
-    currentInfo <- getQueue (Map.lookup user . queueIndex)
-    case currentInfo of
-        Nothing -> withQueueIndex (Map.insert user (nnid, miid, 0, 0))
-        Just (_, _, wins, losses) -> withQueueIndex (Map.insert user (nnid, miid, wins, losses))
-    indexMsg user
+    getSmashTagMsg (user, info)
+handleCommand (Index user smashTag dolphinVersion) =
+    case dolphinVersion of
+        InvalidDolphin badDolphinVersion -> badDolphinMsg (user, badDolphinVersion)
+        _ -> do
+            currentInfo <- getQueue (Map.lookup user . queueIndex)
+            let newInfo = getNewInfo currentInfo
+            withQueueIndex (Map.insert user newInfo)
+            indexMsg (user, newInfo)
+    where
+        getNewInfo maybeCurrentInfo = 
+            case maybeCurrentInfo of
+                Nothing -> IndexEntry smashTag dolphinVersion 0 0
+                Just currentInfo -> currentInfo { indexedSmashTag = smashTag, indexedDolphinVersion = dolphinVersion}
 handleCommand (Friend user) = do
     withQueueFriendMes (Set.insert user)
     friendMeMsg user
@@ -172,21 +185,32 @@ handleCommand (Info user) = do
     infoMsg (user, queueSize, maybeInfo, maybePosition)
 handleCommand (Enter user) = do
     open <- getQueue queueOpen
-    indexed <- getQueue (Map.member user . queueIndex)
+    maybeUserInfo <- getQueue (Map.lookup user . queueIndex)
     maybeUserOrTeam <- userOrTeamBasedOnMode user
     userOrTeamInSoftCloseList <- getQueue (Set.member maybeUserOrTeam . Set.map Just . queueSoftClosedList)
     queueIsSoftClosed <- getQueue queueSoftClose
     let userOrTeamSoftClosed = queueIsSoftClosed && userOrTeamInSoftCloseList
     queue <- getQueue queueQueue
     let alreadyInQueue = maybe False (isJust . flip Seq.elemIndexL queue) maybeUserOrTeam
-    position <- case (open, indexed, maybeUserOrTeam, alreadyInQueue, userOrTeamSoftClosed) of
-        (True, True, Just userOrTeam, False, False) -> do
+    position <- case (open, maybeUserInfo, maybeUserOrTeam, alreadyInQueue, userOrTeamSoftClosed) of
+        (True, Just _, Just userOrTeam, False, False) -> do
             withQueueQueue (Seq.|> userOrTeam)
             when queueIsSoftClosed (withQueueSoftClosedList (Set.insert userOrTeam))
             getQueue (Seq.length . queueQueue)
         (_, _, _, _, _) -> return 0
-    streamer <- getQueue queueStreamer
-    enterMsg (streamer, user, open, indexed, maybeUserOrTeam, alreadyInQueue, userOrTeamSoftClosed, position)
+    mode <- getQueue queueMode
+    if not open
+        then msg "Sorry the queue is closed so you can't !enter. An admin must use !smash open to open the queue."
+        else case maybeUserInfo of
+            Nothing -> user & " is not in the index. Add yourself with !index smashTag dolphinVerson."
+            Just userInfo -> case maybeUserOrTeam of
+                Nothing -> "Couldn't add " & user % " to queue. Try joining a team."
+                Just userOrTeam -> do
+                    if alreadyInQueue
+                        then "Sorry " & userOrTeam % ", you can't join the queue more than once!"
+                        else if userOrTeamSoftClosed then "Sorry " & userOrTeam % ", you can't join the queue again because it is soft closed!"
+                        else if mode == Singles then userIdentifier user userInfo & ", you've now been placed into the queue at position " % position % "! Type !info to see your position."
+                        else userOrTeam & ", you've now been placed into the queue at position " % position % "! Type !info to see your position."
 handleCommand (Here user) = do
     time <- getQueue queueLastMessage
     withQueueHereMap (Map.insert user time)
@@ -259,12 +283,11 @@ handleCommand (TeamInfo team) = do
             case (info1, info2) of
                 (Nothing, _) -> "Team member " & member1 % " is no longer in the index!"
                 (_, Nothing) -> "Team member " & member2 % " is no longer in the index!"
-                (Just (nnid1, miiname1, _, _), Just (nnid2, miiname2, _, _)) ->
+                (Just indexEntry1, Just indexEntry2) ->
                     "| " & team
                     % " | " % member1 % friendmeSuffix1
                     % " & " % member2 % friendmeSuffix2
-                    % " | " % nnid1 % " & " % nnid2
-                    % " | " % miiname1 % " & " % miiname2
+                    % " | " % indexedSmashTag indexEntry1 % " & " % indexedSmashTag indexEntry2
                     % " |"
 handleCommand (LeaveTeam user) = do
     maybeExistingTeam <- getQueue (Map.lookup user . queueTeams)
@@ -300,6 +323,13 @@ handleCommand (BestOf Doubles val) = do
 handleCommand (BestOf mode _) = do
     "Can't set best of for mode " & mode
 handleCommand _ = msg "Not implemented yet!"
+
+lookupIdentifier :: TwitchUser -> State Queue UserIdentifier
+lookupIdentifier user = do
+    maybeInfo <- Map.lookup user <$> getQueue queueIndex
+    return $ case maybeInfo of
+        Just info -> userIdentifier user info
+        _ -> UserIdentifier user (SmashTag "unknown tag")
 
 setAndShow :: Show a => String -> (Maybe a -> State Queue ()) -> Maybe a -> State Queue (Maybe Message)
 setAndShow name set val = do
@@ -342,13 +372,13 @@ endMatch winner loser = do
                     winnerInfo <- getQueue (Map.lookup winnerUser . queueIndex)
                     case winnerInfo of
                         Nothing -> return ()
-                        Just (nnid, miiname, wins, losses) ->
-                            withQueueIndex (Map.insert winnerUser (nnid, miiname, wins + 1, losses))
+                        Just winnerEntry ->
+                            withQueueIndex (Map.insert winnerUser (winnerEntry { indexedWins = indexedWins winnerEntry + 1 }))
                     loserInfo <- getQueue (Map.lookup loserUser . queueIndex)
                     case loserInfo of
                         Nothing -> return ()
-                        Just (nnid, miiname, wins, losses) ->
-                            withQueueIndex (Map.insert loserUser (nnid, miiname, wins, losses + 1))
+                        Just loserEntry ->
+                            withQueueIndex (Map.insert loserUser (loserEntry { indexedLosses = indexedLosses loserEntry + 1 }))
                 _ -> return () -- We don't count doubles wins/losses
             current <- getCurrentTip
             setWinMsg (winner, loser, setWins, setLosses, current)
