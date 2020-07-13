@@ -59,8 +59,8 @@ commands =
         "Print help for the given command"
     , userCmd "nnid" (return . GetNNID)
         "Display the nnid qbot has for you"
-    , userCmd "index" (\user -> Index user <$> nnidP <*> miiP)
-        "Add yourself to the index with given nnid and miiname"
+    , userCmd "index" (\user -> Index user <$> connectCodeP)
+        "Add yourself to the index with given connect code"
     , userCmd "friendme" (return . Friend)
         "Mark yourself as needing to be friended"
     , cmd "list" (List <$> maybeP intP)
@@ -160,11 +160,8 @@ mapStringP s r = string s >> return r
 userP :: ReadP TwitchUser
 userP = typedIdentifierP twitchUser
 
-nnidP :: ReadP NNID
-nnidP = typedIdentifierP NNID
-
-miiP :: ReadP MiiName
-miiP = fmap MiiName remainderP
+connectCodeP :: ReadP ConnectCode
+connectCodeP = typedIdentifierP ConnectCode
 
 userOrTeamP :: ReadP UserOrTeam
 userOrTeamP = typedIdentifierP userOrTeam

@@ -29,7 +29,7 @@ data Queue
     , queueCrewStockA :: Int
     , queueCrewStockB :: Int
     , queueFriendMes :: Set.Set TwitchUser
-    , queueIndex :: Map.Map TwitchUser (NNID, MiiName, Int, Int)
+    , queueIndex :: Map.Map TwitchUser (ConnectCode, Int, Int)
     , queueRulesSingles :: String
     , queueRulesDoubles :: String
     , queueRulesCrew :: String
@@ -119,7 +119,7 @@ setQueueCrewStockB :: QueueSet Int
 setQueueCrewStockB v = modify $ \q -> q { queueCrewStockB = v }
 withQueueFriendMes :: QueueModify (Set.Set TwitchUser)
 withQueueFriendMes f = modify $ \q -> q { queueFriendMes = f (queueFriendMes q) }
-withQueueIndex :: QueueModify (Map.Map TwitchUser (NNID, MiiName, Int, Int))
+withQueueIndex :: QueueModify (Map.Map TwitchUser (ConnectCode, Int, Int))
 withQueueIndex f = modify $ \q -> q { queueIndex = f (queueIndex q) }
 setQueueRulesSingles :: QueueSet String
 setQueueRulesSingles v = modify $ \q -> q { queueRulesSingles = v }
@@ -172,6 +172,23 @@ getFriendMesForMode = do
             Crew -> Nothing -- TODO: do we need this?
             InvalidMode _ -> Nothing -- This should never happen
 
+getConnectCodes :: UserOrTeam -> State Queue [ConnectCode]
+getConnectCodes userOrTeam = do
+    mode <- getQueue queueMode
+    case mode of
+        Singles -> do
+            let user = twitchUser . getUserOrTeam $ userOrTeam
+            lookupConnectCode user
+        Doubles -> do
+            let team = TeamName . getUserOrTeam $ userOrTeam
+            users <- getQueue (Map.keys . Map.filter (==team) . queueTeams)
+            fmap concat (mapM lookupConnectCode users)
+        Crew -> return [] -- TODO: Crew
+        InvalidMode _ -> return [] -- Shrug
+    where
+        extractConnectCode (connectCode, _, _) = connectCode
+        lookupConnectCode user = getQueue (fmap extractConnectCode . maybeToList . Map.lookup user . queueIndex)
+
 generalizeUser :: TwitchUser -> UserOrTeam
 generalizeUser (TwitchUser user) = UserOrTeam user
 
@@ -196,23 +213,6 @@ getRequiredWins = do
         Doubles -> getQueue queueDoublesBestOf
         _ -> return 0 -- This doesn't really make sense
     return (ceiling . (/(2::Double)) . fromIntegral $ bestOf)
-
-getMiiNames :: UserOrTeam -> State Queue [MiiName]
-getMiiNames userOrTeam = do
-    mode <- getQueue queueMode
-    case mode of
-        Singles -> do
-            let user = twitchUser . getUserOrTeam $ userOrTeam
-            lookupMii user
-        Doubles -> do
-            let team = TeamName . getUserOrTeam $ userOrTeam
-            users <- getQueue (Map.keys . Map.filter (==team) . queueTeams)
-            fmap concat (mapM lookupMii users)
-        Crew -> return [] -- TODO: Crew
-        InvalidMode _ -> return [] -- Shrug
-    where
-        extractMiiName (_, mii, _, _) = mii
-        lookupMii user = getQueue (fmap extractMiiName . maybeToList . Map.lookup user . queueIndex)
 
 userOrTeamBasedOnMode :: TwitchUser -> State Queue (Maybe UserOrTeam)
 userOrTeamBasedOnMode user = get >>= \q -> case queueMode q of

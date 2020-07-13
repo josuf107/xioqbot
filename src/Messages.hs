@@ -7,7 +7,6 @@ import Prelude hiding (print)
 import Control.Monad.State
 import Data.List
 import Data.Maybe
-import qualified Data.Map as Map
 import qualified Data.Sequence as Seq
 
 type Msg a = a -> State Queue (Maybe String)
@@ -50,6 +49,9 @@ instance Print MiiName where
 
 instance Print NNID where
     print = msg . getNNID
+
+instance Print ConnectCode where
+    print = msg . getConnectCode
 
 instance Print TeamName where
     print = msg . getTeamName
@@ -170,9 +172,9 @@ friendListMsg (limit, friendMes) = "Next " & limit % " friendmes in the queue: "
 friendListClearMsg :: Msg Int
 friendListClearMsg limit = "Cleared friend list with limit " & limit
 
-getNNIDMsg :: Msg (TwitchUser, Maybe (NNID, a, b, c))
-getNNIDMsg (user, Just (nnid, _, _, _)) = user & "'s NNID is " % nnid % "."
-getNNIDMsg (user, Nothing) = user & " is not in the index. Try !index NNID MiiName."
+getConnectCodeMsg :: Msg (TwitchUser, Maybe (ConnectCode, a, b))
+getConnectCodeMsg (user, Just (connectCode, _, _)) = user & "'s connect code is " % connectCode % "."
+getConnectCodeMsg (user, Nothing) = user & " is not in the index. Try !index CONNECT_CODE."
 
 indexMsg :: Msg TwitchUser
 indexMsg user = "Added " & user % " to index"
@@ -202,25 +204,23 @@ notInTheQueueMsg userOrTeam = userOrTeam & " is not in the queue, so I can't rem
 removedMsg :: Msg UserOrTeam
 removedMsg userOrTeam = "Removed " & userOrTeam % " from the queue."
 
-infoMsg :: Msg (TwitchUser, Int, Maybe (NNID, MiiName, Int, Int), Maybe Int)
-infoMsg (user, _, Nothing, _) = user & " is not in the index. Add yourself with !index NNID MiiName."
-infoMsg (user, _, Just (nnid, miiName, wins, losses), Nothing) =
+infoMsg :: Msg (TwitchUser, Int, Maybe (ConnectCode, Int, Int), Maybe Int)
+infoMsg (user, _, Nothing, _) = user & " is not in the index. Add yourself with !index CONNECT_CODE."
+infoMsg (user, _, Just (connectCode, wins, losses), Nothing) =
     "| User: " & user
-    % " | NNID: " % nnid
-    % " | MiiName: " % miiName
+    % " | Connect Code: " % connectCode
     % " | W:L " % wins % ":" % losses % " |"
-infoMsg (user, queueSize, Just (nnid, miiName, wins, losses), Just position) =
+infoMsg (user, queueSize, Just (connectCode, wins, losses), Just position) =
     "| User: " & user
     % " | Position " % position % "/" % queueSize % " in Queue"
-    % " | NNID: " % nnid
-    % " | MiiName: " % miiName
+    % " | Connect Code: " % connectCode
     % " | W:L " % wins % ":" % losses % " |"
 
-enterMsg :: Msg (TwitchUser, TwitchUser, Bool, Bool, Maybe UserOrTeam, Bool, Bool, Int)
-enterMsg (streamer, user, open, indexed, maybeUserOrTeam, alreadyInQueue, userOrTeamSoftClosed, position) =
+enterMsg :: Msg (TwitchUser, Bool, Bool, Maybe UserOrTeam, Bool, Bool, Int)
+enterMsg (user, open, indexed, maybeUserOrTeam, alreadyInQueue, userOrTeamSoftClosed, position) =
     case (open, indexed, maybeUserOrTeam, alreadyInQueue, userOrTeamSoftClosed) of
         (False, _, _, _, _) -> msg "Sorry the queue is closed so you can't !enter. An admin must use !smash open to open the queue."
-        (_, False, _, _, _) -> user & " is not in the index. Add yourself with !index NNID MiiName."
+        (_, False, _, _, _) -> user & " is not in the index. Add yourself with !index CONNECT_CODE."
         (_, _, Nothing, _, _) -> "Couldn't add " & user % " to queue. Try joining a team."
         (_, _, Just userOrTeam, True, _) -> "Sorry " & userOrTeam
             % ", you can't join the queue more than once!"
@@ -229,8 +229,7 @@ enterMsg (streamer, user, open, indexed, maybeUserOrTeam, alreadyInQueue, userOr
         (_, _, Just userOrTeam, _, False) -> userOrTeam
             & ", you've now been placed into the queue at position "
             % position
-            % "! Type !info to see your position and !friendme if you've yet to add "
-            % streamer % "."
+            % "! Type !info to see your position."
 
 hereMsg :: Msg TwitchUser
 hereMsg user = "Okay! " & user % " is ready!"
@@ -246,11 +245,7 @@ newTeamMsg (creator, team) = creator & " has created the new team "
 
 printUserOrTeam :: Msg UserOrTeam
 printUserOrTeam userOrTeam = do
-    friendMes <- fmap (Map.member userOrTeam) getFriendMesForMode
-    miiNames <- getMiiNames userOrTeam
-    let displayUserOrTeam = getUserOrTeam userOrTeam
-    case (friendMes, miiNames) of
-        (True, []) -> displayUserOrTeam & "+"
-        (False, []) -> print displayUserOrTeam
-        (True, miis) -> displayUserOrTeam & "+ (" % miis % ")"
-        (False, miis) -> displayUserOrTeam & " (" % miis % ")"
+    connectCodes <- getConnectCodes userOrTeam
+    if null connectCodes
+        then print $ getUserOrTeam userOrTeam
+        else getUserOrTeam userOrTeam & " (" % connectCodes % ")"

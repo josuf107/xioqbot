@@ -78,7 +78,7 @@ tests =
     , test "Open opens the queue" $ do
         streamer "!smash open"
         indexAndEnter "xio"
-        botSay "Xio (xiomiiname), you've now been placed into the queue at position 1! Type !info to see your position and !friendme if you've yet to add Josuf107."
+        botSay "Xio (xiocode), you've now been placed into the queue at position 1! Type !info to see your position."
     , test "Close" $ do
         streamer "!smash close"
         botSay "The queue is closed"
@@ -91,13 +91,13 @@ tests =
         streamer "!smash open"
         indexAndEnter "xio"
         streamer "!smash start"
-        botSay "The first match is beginning and the opponent is Xio (xiomiiname)!"
+        botSay "The first match is beginning and the opponent is Xio (xiocode)!"
     , test "Start (singles; two in queue)" $ do
         streamer "!smash open"
         indexAndEnter "xio"
         indexAndEnter "zio"
         streamer "!smash start"
-        botSay "The first match is beginning and the opponent is Xio (xiomiiname)! Next up is Zio (ziomiiname)!"
+        botSay "The first match is beginning and the opponent is Xio (xiocode)! Next up is Zio (ziocode)!"
     , test "Start (singles; empty queue)" $ do
         streamer "!smash open"
         streamer "!smash start"
@@ -112,7 +112,7 @@ tests =
         user "zio" "!accept xioteam"
         user "xio" "!enter"
         streamer "!smash start"
-        botSay "The first match is beginning and the opponent is Xioteam (xiomiiname & ziomiiname)!"
+        botSay "The first match is beginning and the opponent is Xioteam (xiocode, ziocode)!"
     , test "Start (doubles; two in queue)" $ do
         streamer "!smash mode doubles"
         streamer "!smash open"
@@ -129,7 +129,7 @@ tests =
         user "bar" "!accept footeam"
         user "foo" "!enter"
         streamer "!smash start"
-        botSay "The first match is beginning and the opponent is Xioteam (xiomiiname & ziomiiname)! Next up is Footeam (barmiiname & foomiiname)!"
+        botSay "The first match is beginning and the opponent is Xioteam (xiocode, ziocode)! Next up is Footeam (barcode, foocode)!"
     , test "Start (doubles; empty queue)" $ do
         streamer "!smash open"
         streamer "!smash start"
@@ -139,7 +139,7 @@ tests =
         indexAndEnter "xio"
         streamer "!smash start"
         streamer "!win"
-        botSay "Josuf107 has just won a match against Xio (xiomiiname)! The score is 1:0 and it requires 2 to take the set"
+        botSay "Josuf107 has just won a match against Xio (xiocode)! The score is 1:0 and it requires 2 to take the set"
     , test "Win (streamer takes set; two in queue)" $ do
         streamer "!smash open"
         indexAndEnter "xio"
@@ -148,7 +148,7 @@ tests =
         streamer "!win"
         streamer "!lose"
         streamer "!win"
-        botSay "Josuf107 has won the set against Xio (xiomiiname)! The score was 2:1. Next up is Zio (ziomiiname)!"
+        botSay "Josuf107 has won the set against Xio (xiocode)! The score was 2:1. Next up is Zio (ziocode)!"
     , test "Win (streamer takes set; one in queue)" $ do
         streamer "!smash open"
         indexAndEnter "xio"
@@ -156,7 +156,7 @@ tests =
         streamer "!win"
         streamer "!lose"
         streamer "!win"
-        botSay "Josuf107 has won the set against Xio (xiomiiname)! The score was 2:1."
+        botSay "Josuf107 has won the set against Xio (xiocode)! The score was 2:1."
     , test "Win (doubles; streamer takes set; two in queue)" $ do
         streamer "!smash mode doubles"
         streamer "!smash open"
@@ -180,14 +180,14 @@ tests =
         streamer "!win"
         streamer "!lose"
         streamer "!win"
-        botSay "Steamrollers (bromiiname) has won the set against Xioteam (xiomiiname & ziomiiname)! The score was 2:1. Next up is A-team (amiiname & bmiiname)!"
+        botSay "Steamrollers (brocode) has won the set against Xioteam (xiocode, ziocode)! The score was 2:1. Next up is A-team (acode, bcode)!"
     , test "Skip (two in queue)" $ do
         streamer "!smash open"
         indexAndEnter "xio"
         indexAndEnter "zio"
         streamer "!smash start"
         streamer "!smash skip"
-        botSay "Skipped Xio (xiomiiname). Next up is Zio (ziomiiname)!"
+        botSay "Skipped Xio (xiocode). Next up is Zio (ziocode)!"
     , test "Skip (doubles; two in queue)" $ do
         streamer "!smash mode doubles"
         streamer "!smash open"
@@ -205,45 +205,45 @@ tests =
         user "a" "!enter"
         streamer "!smash start"
         streamer "!smash skip"
-        botSay "Skipped Xfactor (xiomiiname & ziomiiname). Next up is A-team (amiiname & bmiiname)!"
+        botSay "Skipped Xfactor (xiocode, ziocode). Next up is A-team (acode, bcode)!"
     , test "Move" $ do
         streamer "!smash open"
         indexAndEnter "xio"
         indexAndEnter "zio"
         streamer "!smash move zio 0"
         streamer "!list"
-        botSay "Currently playing Zio (ziomiiname). Next in queue: Xio (xiomiiname)"
+        botSay "Currently playing Zio (ziocode). Next in queue: Xio (xiocode)"
     , test "Can't enter closed queue" $ do
         user "a" "!enter"
         botSay "Sorry the queue is closed so you can't !enter. An admin must use !smash open to open the queue."
     , test "Can't enter non-indexed user" $ do
         streamer "!smash open"
         user "a" "!enter"
-        botSay "A is not in the index. Add yourself with !index NNID MiiName."
+        botSay "A is not in the index. Add yourself with !index CONNECT_CODE."
     , test "Can enter indexed users into open queue" $ do
         streamer "!smash open"
         indexAndEnter "a"
-        botSay "A (amiiname), you've now been placed into the queue at position 1! Type !info to see your position and !friendme if you've yet to add Josuf107."
+        botSay "A (acode), you've now been placed into the queue at position 1! Type !info to see your position."
     , test "Non-enqueued info output formatted properly" $ do
-        user "xio" "!index xionnid xiomii"
+        user "xio" "!index xiocode"
         user "xio" "!info"
-        botSay "| User: Xio | NNID: xionnid | MiiName: xiomii | W:L 0:0 |"
+        botSay "| User: Xio | Connect Code: xiocode | W:L 0:0 |"
     , test "Enqueued info output formatted properly" $ do
         streamer "!smash open"
-        user "xio" "!index xionnid xiomii"
+        user "xio" "!index xiocode"
         user "xio" "!enter"
         user "xio" "!info"
-        botSay "| User: Xio | Position 1/1 in Queue | NNID: xionnid | MiiName: xiomii | W:L 0:0 |"
+        botSay "| User: Xio | Position 1/1 in Queue | Connect Code: xiocode | W:L 0:0 |"
     , test "Absent !info output formatted properly" $ do
         user "xio" "!info"
-        botSay "Xio is not in the index. Add yourself with !index NNID MiiName."
+        botSay "Xio is not in the index. Add yourself with !index CONNECT_CODE."
     , test "Known !nnid formatted properly" $ do
-        user "xio" "!index xionnid xiomii"
+        user "xio" "!index xiocode"
         user "xio" "!nnid"
-        botSay "Xio's NNID is xionnid."
+        botSay "Xio's connect code is xiocode."
     , test "Unknown !nnid formatted properly" $ do
         user "xio" "!nnid"
-        botSay "Xio is not in the index. Try !index NNID MiiName."
+        botSay "Xio is not in the index. Try !index CONNECT_CODE."
     , test "Accept" $ do
         index "xio"
         index "zio"
@@ -276,28 +276,17 @@ tests =
         streamer "!smash open"
         streamer "!smash softclose"
         indexAndEnter "xio"
-        botSay "Xio (xiomiiname), you've now been placed into the queue at position 1! Type !info to see your position and !friendme if you've yet to add Josuf107."
+        botSay "Xio (xiocode), you've now been placed into the queue at position 1! Type !info to see your position."
         streamer "!smash skip"
         xio "!enter"
-        botSay "Sorry Xio (xiomiiname), you can't join the queue again because it is soft closed!"
+        botSay "Sorry Xio (xiocode), you can't join the queue again because it is soft closed!"
     , test "SoftClose index fail" $ do
         streamer "!smash open"
         streamer "!smash softclose"
         xio "!enter"
-        botSay "Xio is not in the index. Add yourself with !index NNID MiiName."
+        botSay "Xio is not in the index. Add yourself with !index CONNECT_CODE."
         indexAndEnter "xio"
-        botSay "Xio (xiomiiname), you've now been placed into the queue at position 1! Type !info to see your position and !friendme if you've yet to add Josuf107."
-    , test "List friendmes" $ do
-        streamer "!smash open"
-        streamer "!smash start"
-        indexAndEnter "xio"
-        xio "!friendme"
-        indexAndEnter "zio"
-        zio "!friendme"
-        index "bob"
-        user "bob" "!friendme"
-        streamer "!friendme list"
-        botSay "Next 10 friendmes in the queue: Xio+ (xiomiiname), Zio+ (ziomiiname)"
+        botSay "Xio (xiocode), you've now been placed into the queue at position 1! Type !info to see your position."
     ]
 
 xio :: String -> TestSpec
@@ -308,7 +297,7 @@ zio = user "zio"
 
 index :: String -> TestSpec
 index u = do
-    user u ("!index " ++ u ++ "nnid " ++ u ++ "miiname")
+    user u ("!index " ++ u ++ "code")
 
 indexAndEnter :: String -> Writer [TestStep] ()
 indexAndEnter u = do

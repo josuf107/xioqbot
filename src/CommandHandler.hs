@@ -129,12 +129,12 @@ handleCommand (FriendClear maybeLimit) = do
     friendListClearMsg limit
 handleCommand (GetNNID user) = do
     info <- getQueue (Map.lookup user . queueIndex)
-    getNNIDMsg (user, info)
-handleCommand (Index user nnid miid) = do
+    getConnectCodeMsg (user, info)
+handleCommand (Index user connectCode) = do
     currentInfo <- getQueue (Map.lookup user . queueIndex)
     case currentInfo of
-        Nothing -> withQueueIndex (Map.insert user (nnid, miid, 0, 0))
-        Just (_, _, wins, losses) -> withQueueIndex (Map.insert user (nnid, miid, wins, losses))
+        Nothing -> withQueueIndex (Map.insert user (connectCode, 0, 0))
+        Just (_, wins, losses) -> withQueueIndex (Map.insert user (connectCode, wins, losses))
     indexMsg user
 handleCommand (Friend user) = do
     withQueueFriendMes (Set.insert user)
@@ -185,8 +185,7 @@ handleCommand (Enter user) = do
             when queueIsSoftClosed (withQueueSoftClosedList (Set.insert userOrTeam))
             getQueue (Seq.length . queueQueue)
         (_, _, _, _, _) -> return 0
-    streamer <- getQueue queueStreamer
-    enterMsg (streamer, user, open, indexed, maybeUserOrTeam, alreadyInQueue, userOrTeamSoftClosed, position)
+    enterMsg (user, open, indexed, maybeUserOrTeam, alreadyInQueue, userOrTeamSoftClosed, position)
 handleCommand (Here user) = do
     time <- getQueue queueLastMessage
     withQueueHereMap (Map.insert user time)
@@ -252,19 +251,14 @@ handleCommand (TeamInfo team) = do
         (member1:member2:_) -> do
             info1 <- getQueue (Map.lookup member1 . queueIndex)
             info2 <- getQueue (Map.lookup member2 . queueIndex)
-            friendme1 <- getQueue (Set.member member1 . queueFriendMes)
-            friendme2 <- getQueue (Set.member member2 . queueFriendMes)
-            let friendmeSuffix1 = if friendme1 then "+" else ""
-            let friendmeSuffix2 = if friendme2 then "+" else ""
             case (info1, info2) of
                 (Nothing, _) -> "Team member " & member1 % " is no longer in the index!"
                 (_, Nothing) -> "Team member " & member2 % " is no longer in the index!"
-                (Just (nnid1, miiname1, _, _), Just (nnid2, miiname2, _, _)) ->
+                (Just (connectCode1, _, _), Just (connectCode2, _, _)) ->
                     "| " & team
-                    % " | " % member1 % friendmeSuffix1
-                    % " & " % member2 % friendmeSuffix2
-                    % " | " % nnid1 % " & " % nnid2
-                    % " | " % miiname1 % " & " % miiname2
+                    % " | " % member1
+                    % " & " % member2
+                    % " | " % connectCode1 % " & " % connectCode2
                     % " |"
 handleCommand (LeaveTeam user) = do
     maybeExistingTeam <- getQueue (Map.lookup user . queueTeams)
@@ -342,13 +336,13 @@ endMatch winner loser = do
                     winnerInfo <- getQueue (Map.lookup winnerUser . queueIndex)
                     case winnerInfo of
                         Nothing -> return ()
-                        Just (nnid, miiname, wins, losses) ->
-                            withQueueIndex (Map.insert winnerUser (nnid, miiname, wins + 1, losses))
+                        Just (connectCode, wins, losses) ->
+                            withQueueIndex (Map.insert winnerUser (connectCode, wins + 1, losses))
                     loserInfo <- getQueue (Map.lookup loserUser . queueIndex)
                     case loserInfo of
                         Nothing -> return ()
-                        Just (nnid, miiname, wins, losses) ->
-                            withQueueIndex (Map.insert loserUser (nnid, miiname, wins, losses + 1))
+                        Just (connectCode, wins, losses) ->
+                            withQueueIndex (Map.insert loserUser (connectCode, wins, losses + 1))
                 _ -> return () -- We don't count doubles wins/losses
             current <- getCurrentTip
             setWinMsg (winner, loser, setWins, setLosses, current)

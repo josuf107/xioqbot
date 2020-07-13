@@ -249,15 +249,15 @@ instance (Ord k, Serialize' k, Serialize' v) => Serialize' (Map.Map k v) where
     get' = fmap (Map.mapKeys getSerial . fmap getSerial) get
 
 genericizeIndex
-    :: Map.Map TwitchUser (NNID, MiiName, Int, Int)
-    -> Map.Map String (String, String, Int, Int)
+    :: Map.Map TwitchUser (ConnectCode, Int, Int)
+    -> Map.Map String (String, Int, Int)
 genericizeIndex
     = Map.mapKeys getTwitchUser
-    . fmap (\(NNID nnid, MiiName mii, w, l) -> (nnid, mii, w, l))
+    . fmap (\(ConnectCode connectCode, w, l) -> (connectCode, w, l))
 
 ungenericizeIndex
-    :: Map.Map String (String, String, Int, Int)
-    -> Map.Map TwitchUser (NNID, MiiName, Int, Int)
+    :: Map.Map String (String, Int, Int)
+    -> Map.Map TwitchUser (ConnectCode, Int, Int)
 ungenericizeIndex
     = Map.mapKeys TwitchUser
-    . fmap (\(nnid, mii, w, l) -> (NNID nnid, MiiName mii, w, l))
+    . fmap (\(connectCode, w, l) -> (ConnectCode connectCode, w, l))
